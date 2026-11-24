@@ -1,0 +1,2530 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>المؤذن - Al-Moazin Digital Clock</title>
+<style>
+  :root {
+    --screen-bg: #090b12;
+    --header-bg: transparent;
+    --header-text: #ffffff;
+    --box-border: rgba(255, 255, 255, 0.22);
+    --clock-bg: rgba(91, 27, 153, 0.82);
+    --clock-text: #ffffff;
+    --clock-accent: #eae0ff;
+    --date-text: #ffffff;
+    --next-bg: rgba(20, 23, 32, 0.86);
+    --next-text: #ffffff;
+    --prayer-bg: rgba(18, 22, 31, 0.76);
+    --prayer-text: #ffffff;
+    --accent: rgba(106, 27, 154, 0.88);
+    --sunrise-bg: transparent;
+    --sunrise-text: #ffffff;
+    --jumuah-bg: transparent;
+    --jumuah-text: #ffffff;
+    --ui-btn-bg: rgba(0, 0, 0, 0.40);
+    --ui-btn-text: #ffffff;
+    --bg-scrim-alpha: 0.20;
+    --font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    --clock-scale: 1;
+    --countdown-scale: 1;
+    --text-scale: 1;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--screen-bg);
+    color: var(--prayer-text);
+    font-family: var(--font-family);
+    overflow-x: hidden;
+  }
+
+  .app-root {
+    position: relative;
+    min-height: 100vh;
+    width: 100%;
+    background-color: var(--screen-bg);
+    background-image: radial-gradient(circle at 50% 25%, rgba(197, 160, 56, 0.14), rgba(7, 18, 14, 0.96));
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 14px 18px 18px;
+    gap: 12px;
+  }
+  .bg-scrim {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, var(--bg-scrim-alpha));
+    pointer-events: none;
+    z-index: 0;
+  }
+  .dim-layer {
+    position: fixed; inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .content-layer {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    flex: 1;
+    width: 100%;
+    max-width: 1260px;
+    margin: 0 auto;
+    gap: 12px;
+  }
+
+  /* Minimal Airy Top Header */
+  .top-header {
+    background: var(--header-bg);
+    border-radius: 14px;
+    padding: 4px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    position: relative;
+  }
+  .header-right-controls {
+    display: flex; align-items: center; gap: 6px; position: relative;
+  }
+  .status-pill {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 700; color: var(--header-text);
+    padding: 4px 8px; border-radius: 999px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.75);
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #2ed573; flex-shrink: 0; }
+  .status-dot.offline { background: #ffa502; }
+  .menu-trigger-btn {
+    min-width: 44px; min-height: 44px;
+    border: none;
+    background: var(--ui-btn-bg);
+    color: var(--ui-btn-text);
+    border-radius: 999px; cursor: pointer; font-size: 19px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0 10px;
+  }
+  .menu-trigger-btn:hover { filter: brightness(1.18); }
+  .menu-dropdown {
+    position: absolute; top: 50px; right: 0; z-index: 40;
+    background: #10201a; border: 1.5px solid var(--box-border);
+    border-radius: 14px; padding: 6px; min-width: 240px;
+    box-shadow: 0 14px 32px rgba(0,0,0,0.65);
+    display: none; flex-direction: column; gap: 4px;
+  }
+  .menu-dropdown.show { display: flex; }
+  .menu-dropdown button {
+    width: 100%; text-align: right; background: transparent; border: none;
+    color: #f4e6be; padding: 10px 12px; border-radius: 10px; cursor: pointer;
+    font-family: inherit; font-size: 13.5px; font-weight: 700;
+  }
+  .menu-dropdown button:hover { background: rgba(197, 160, 56, 0.18); }
+
+  .city-pill {
+    background: var(--ui-btn-bg);
+    border: none;
+    color: var(--ui-btn-text);
+    border-radius: 999px;
+    padding: 6px 14px;
+    min-height: 44px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .city-pill strong { font-size: calc(13.5px * var(--text-scale)); }
+  .city-pill small { color: var(--clock-accent); font-size: 12px; font-weight: 800; }
+
+  .mosque-title {
+    color: var(--header-text);
+    font-size: calc(28px * var(--text-scale));
+    font-weight: 800;
+    text-align: center;
+    flex: 1;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.75);
+    letter-spacing: 0.3px;
+  }
+
+  /* Center Grid: Sunrise (Right) | Al-Moazin Clock Box (Center) | Jumuah (Left) */
+  .center-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: auto 0;
+  }
+  .center-grid {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 2.35fr 1fr;
+    gap: 14px;
+    align-items: center;
+  }
+  .side-box {
+    border-radius: 18px;
+    padding: 14px 10px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: none;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  }
+  .side-box.has-fill {
+    border: 1.5px solid var(--box-border);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.42);
+    text-shadow: none;
+  }
+  .side-box:hover { transform: translateY(-2px); }
+  .sunrise-box { background: var(--sunrise-bg); color: var(--sunrise-text); }
+  .jumuah-box { background: var(--jumuah-bg); color: var(--jumuah-text); }
+  .side-box .label { font-size: calc(19px * var(--text-scale)); font-weight: 700; opacity: 0.95; }
+  .side-box .time { font-size: calc(28px * var(--text-scale)); font-weight: 800; font-variant-numeric: tabular-nums; direction: ltr; }
+
+  /* Two-Tone Joined Clock + Next Prayer Card (Mawaqit / User Screenshot Look) */
+  .clock-hero-card {
+    width: 100%;
+    border-radius: 22px;
+    overflow: hidden;
+    border: 1.5px solid var(--box-border);
+    box-shadow: 0 14px 36px rgba(0,0,0,0.52);
+    display: flex;
+    flex-direction: column;
+  }
+  .clock-box {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--clock-bg);
+    background-size: cover;
+    background-position: center;
+    color: var(--clock-text);
+    padding: 16px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .clock-box.has-img::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 0;
+  }
+  .clock-box > * { position: relative; z-index: 1; }
+  .clock-digits-wrap {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    direction: ltr;
+  }
+  .clock-main {
+    font-size: calc(74px * var(--clock-scale));
+    font-weight: 800;
+    line-height: 1.02;
+    color: var(--clock-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .clock-sec-col {
+    display: flex; flex-direction: column; align-items: flex-start;
+  }
+  .clock-sec {
+    font-size: calc(25px * var(--clock-scale));
+    color: var(--clock-accent);
+    font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .clock-period {
+    font-size: calc(15px * var(--text-scale));
+    color: var(--clock-accent);
+    font-weight: 800;
+  }
+  .dates-row {
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+    font-size: calc(15.5px * var(--text-scale));
+    color: var(--date-text);
+    font-weight: 600;
+  }
+  .city-meta-line {
+    font-size: calc(12.5px * var(--text-scale));
+    color: var(--date-text);
+    opacity: 0.82;
+    font-weight: 600;
+  }
+
+  /* Seamlessly Attached Next Prayer Footer */
+  .next-prayer-footer {
+    background: var(--next-bg);
+    color: var(--next-text);
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    text-align: center;
+    font-size: calc(21px * var(--countdown-scale));
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  .next-prayer-footer small {
+    opacity: 0.78;
+    font-size: calc(14px * var(--countdown-scale));
+    font-weight: 600;
+    direction: ltr;
+  }
+  .sync-badge {
+    font-size: 11.5px;
+    color: var(--date-text);
+    opacity: 0.85;
+    background: rgba(0,0,0,0.32);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+
+  /* Horizontal Prayer Cards (ALWAYS 5 cards side-by-side horizontally on TV, PC, Tablet & Phone!) */
+  .prayers-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    align-items: stretch;
+  }
+  .prayer-card {
+    background: var(--prayer-bg);
+    color: var(--prayer-text);
+    border: 1.2px solid var(--box-border);
+    border-radius: 18px;
+    padding: 13px 10px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.38);
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .prayer-card:hover { transform: translateY(-2px); }
+  .prayer-card.active {
+    background: var(--accent);
+    border: 2px solid rgba(255,255,255,0.45);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.52);
+  }
+  .prayer-card .p-name { font-size: calc(18px * var(--text-scale)); font-weight: 800; white-space: nowrap; }
+  .prayer-card .p-time { font-size: calc(25px * var(--text-scale)); font-weight: 900; font-variant-numeric: tabular-nums; direction: ltr; white-space: nowrap; }
+  .prayer-card .p-meta { font-size: calc(13.5px * var(--text-scale)); opacity: 0.88; font-weight: 700; white-space: nowrap; }
+
+  /* Phone Portrait Layout: EXACT SAME 5-column horizontal row, compact responsive typography */
+  .portrait-side-strip { display: none; }
+  @media (max-width: 760px) {
+    .app-root { padding: 10px 8px 12px; gap: 8px; }
+    .mosque-title { font-size: calc(19px * var(--text-scale)); }
+    .center-grid { grid-template-columns: 1fr; }
+    .center-grid > .side-box { display: none !important; }
+    .clock-box { padding: 12px 10px; }
+    .clock-main { font-size: calc(52px * var(--clock-scale)); }
+    .next-prayer-footer { font-size: calc(16px * var(--countdown-scale)); padding: 8px 10px; }
+    .portrait-side-strip {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+    }
+    .prayers-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 5px;
+    }
+    .prayer-card {
+      padding: 9px 2px;
+      border-radius: 13px;
+    }
+    .prayer-card .p-name { font-size: calc(12.5px * var(--text-scale)); }
+    .prayer-card .p-time { font-size: calc(13.5px * var(--text-scale)); }
+    .prayer-card .p-meta { font-size: calc(10.5px * var(--text-scale)); }
+  }
+
+  .quick-modal-backdrop {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(0, 0, 0, 0.78);
+    display: none; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .quick-modal-backdrop.show { display: flex; }
+  .quick-modal-card {
+    background: #10201a;
+    border: 1.5px solid #c5a038;
+    border-radius: 20px;
+    padding: 20px;
+    width: 100%; max-width: 440px;
+    display: flex; flex-direction: column; gap: 12px;
+    color: #fff;
+  }
+  .theme-presets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+    gap: 10px;
+  }
+  .theme-chip {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px; border-radius: 14px;
+    border: 1.5px solid rgba(255,255,255,0.22);
+    cursor: pointer; font-family: inherit; font-weight: 700; font-size: 13px;
+    text-align: right;
+  }
+  .theme-chip.selected { border-color: #dfba47; box-shadow: 0 0 0 1px #dfba47; }
+  .swatch-dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.4); flex-shrink: 0; }
+
+  /* Full-Screen Phase Overlays */
+  .phase-overlay {
+    position: fixed; inset: 0;
+    z-index: 30;
+    background-color: #06140f;
+    background-size: cover;
+    background-position: center;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 36px;
+    text-align: center;
+  }
+  .phase-overlay.show { display: flex; }
+  .phase-overlay::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: rgba(0, 0, 0, 0.56);
+    z-index: 0;
+  }
+  .phase-overlay > * { position: relative; z-index: 1; }
+  .phase-card {
+    background: rgba(14, 21, 15, 0.90);
+    border: 1.5px solid #c5a038;
+    border-radius: 26px;
+    padding: 32px 42px;
+    max-width: 820px;
+    width: 100%;
+    color: #fff;
+  }
+  .phase-title { color: #dfb743; font-size: 38px; font-weight: 800; margin-bottom: 14px; }
+  .phase-big { font-size: calc(86px * var(--countdown-scale)); font-weight: 900; direction: ltr; color: #fff; }
+  .phase-body { font-size: 26px; line-height: 1.7; color: #fff; }
+
+  /* Vertical Collapsible Accordion Settings Modal */
+  .settings-modal {
+    position: fixed; inset: 0; z-index: 50;
+    background: #0b1612;
+    color: #fff;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .settings-modal.show { display: flex; }
+  .settings-header {
+    padding: 14px 20px;
+    background: #0f1f19;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap;
+    border-bottom: 1px solid rgba(197,160,56,0.28);
+  }
+  .settings-body {
+    flex: 1; overflow-y: auto; padding: 16px;
+    max-width: 920px; width: 100%; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .s-accordion {
+    background: #12241d;
+    border: 1px solid rgba(197,160,56,0.22);
+    border-radius: 16px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .s-accordion.open {
+    border-color: rgba(223, 183, 67, 0.58);
+  }
+  .s-acc-head {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #fff;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: right;
+  }
+  .s-acc-head:hover { background: rgba(255,255,255,0.03); }
+  .s-acc-title-wrap {
+    display: flex; align-items: center; gap: 10px; flex: 1;
+  }
+  .s-acc-icon {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: rgba(223,183,67,0.14);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 17px; flex-shrink: 0;
+  }
+  .s-acc-title { font-size: 16px; font-weight: 800; color: #dfb743; }
+  .s-acc-sub { font-size: 12px; color: #9fb6b9; margin-top: 2px; }
+  .s-acc-arrow {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(223,183,67,0.12);
+    color: #dfb743; font-size: 16px; font-weight: 900;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.18s ease;
+  }
+  .s-accordion.open .s-acc-arrow { transform: rotate(180deg); }
+  .s-acc-body {
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 16px 16px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .s-accordion.open .s-acc-body { display: flex; }
+  .s-sub-title { color: #dfb743; font-size: 14px; font-weight: 800; margin-top: 4px; }
+  .s-card {
+    background: #12241d;
+    border: 1px solid rgba(197,160,56,0.24);
+    border-radius: 16px; padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .s-card h3 { color: #dfb743; font-size: 18px; }
+  .s-row {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; flex-wrap: wrap;
+    background: #183028; padding: 10px 14px; border-radius: 12px;
+  }
+  input[type="text"], input[type="number"], select, textarea {
+    background: #0e1c17; color: #ffffff;
+    border: 1px solid rgba(197,160,56,0.38);
+    border-radius: 10px; padding: 10px 12px;
+    font-family: inherit; font-size: 14px;
+  }
+  input[type="color"] { width: 52px; height: 38px; border: none; background: transparent; cursor: pointer; }
+  .btn-primary {
+    background: #c5a038; color: #0b1612; border: none;
+    border-radius: 10px; padding: 10px 16px; font-weight: 800; cursor: pointer; font-family: inherit;
+  }
+  .btn-secondary {
+    background: #183028; color: #f4e6be; border: 1px solid rgba(197,160,56,0.35);
+    border-radius: 10px; padding: 8px 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+  }
+  .btn-danger {
+    background: #4b2020; color: #ffab91; border: 1px solid #ff8a80;
+    border-radius: 10px; padding: 8px 12px; font-weight: 700; cursor: pointer; font-family: inherit;
+  }
+  .city-list { display: flex; flex-direction: column; gap: 8px; max-height: 290px; overflow-y: auto; }
+  .city-item {
+    padding: 10px 14px; border-radius: 10px; background: #183028;
+    display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .city-item.selected { border-color: #dfb743; background: #194235; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #144d3d; color: #fff; border: 1.5px solid #dfb743;
+    padding: 10px 22px; border-radius: 12px; font-weight: 700;
+    z-index: 99; display: none;
+  }
+  .toast.show { display: block; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="appRoot" class="app-root">
+  <div class="bg-scrim"></div>
+  <div id="dimLayer" class="dim-layer"></div>
+
+  <div class="content-layer">
+    <!-- 1. TOP BAR -->
+    <header class="top-header">
+      <div class="header-right-controls">
+        <button class="menu-trigger-btn" onclick="toggleQuickMenu(event)" title="القائمة">≡</button>
+        <div class="status-pill">
+          <span id="statusDot" class="status-dot"></span>
+          <span id="lblOnlineStatus">متصل</span>
+        </div>
+        <button class="menu-trigger-btn" onclick="openSettings(0)" title="الإعدادات" style="font-size:17px;">⚙</button>
+        <div id="menuDropdown" class="menu-dropdown">
+          <button onclick="closeQuickMenu();openSettings(0)">⚙ الإعدادات الكاملة</button>
+          <button onclick="closeQuickMenu();openSettings(0)">🌍 اختيار الدولة والمدينة</button>
+          <button onclick="closeQuickMenu();syncPrayerTimesOnline(true)">🔄 تحديث ومزامنة المواقيت الآن</button>
+          <button onclick="closeQuickMenu();openSettings(4)">🎨 الألوان والمظهر والنسخ</button>
+          <button onclick="closeQuickMenu();toggleManualAdhkar()">📖 أذكار ما بعد الصلاة</button>
+          <button onclick="closeQuickMenu();startSimulation()">▶ تجربة الأذان والإقامة</button>
+          <button onclick="closeQuickMenu();toggleFullscreen()">⛶ وضع ملء الشاشة</button>
+        </div>
+      </div>
+
+      <div class="mosque-title" id="lblMosqueName">مسجد النور</div>
+
+      <button class="city-pill" id="btnCityQuick" onclick="openSettings(0)">
+        <small id="lblWeatherStatus">--°</small>
+        <strong id="lblCityName">عمان</strong>
+      </button>
+    </header>
+
+    <!-- 2. CENTER: SUNRISE | 2-TONE JOINED CLOCK+COUNTDOWN CARD | JUMUAH -->
+    <main class="center-wrap">
+      <div class="center-grid">
+        <div id="boxSunrise" class="side-box sunrise-box" onclick="openQuickEdit('sunrise')" title="اضغط للتعديل السريع">
+          <div class="label">الشروق</div>
+          <div class="time" id="lblSunriseTime">--:--</div>
+        </div>
+
+        <div class="clock-hero-card">
+          <div id="boxClock" class="clock-box">
+            <div class="clock-digits-wrap">
+              <div class="clock-main" id="lblClockMain">--:--</div>
+              <div class="clock-sec-col">
+                <span class="clock-sec" id="lblClockSec">:--</span>
+                <span class="clock-period" id="lblClockPeriod"></span>
+              </div>
+            </div>
+            <div class="dates-row">
+              <span id="lblWeekday">...</span>
+              <span id="lblGregDate">...</span>
+            </div>
+            <div class="dates-row">
+              <span id="lblHijriDate">...</span>
+            </div>
+            <div class="city-meta-line" id="lblCityMeta">الأردن — عمان</div>
+          </div>
+
+          <div id="boxNextPrayer" class="next-prayer-footer">
+            <span>🕌</span>
+            <span id="lblNextPrayerSummary">الفجر بعد --:--:--</span>
+            <small id="lblNextPrayerTime"></small>
+            <span>🕌</span>
+          </div>
+        </div>
+
+        <div id="boxJumuah" class="side-box jumuah-box" onclick="openQuickEdit('jumuah')" title="اضغط للتعديل السريع">
+          <div class="label">الجمعة</div>
+          <div class="time" id="lblJumuahTime">--:--</div>
+        </div>
+      </div>
+
+      <!-- Portrait side boxes -->
+      <div class="portrait-side-strip" id="portraitSideStrip">
+        <div id="boxSunrisePortrait" class="side-box sunrise-box" onclick="openQuickEdit('sunrise')">
+          <div class="label">الشروق</div>
+          <div class="time" id="lblSunriseTimePortrait">--:--</div>
+        </div>
+        <div id="boxJumuahPortrait" class="side-box jumuah-box" onclick="openQuickEdit('jumuah')">
+          <div class="label">الجمعة</div>
+          <div class="time" id="lblJumuahTimePortrait">--:--</div>
+        </div>
+      </div>
+
+      <div class="sync-badge" id="lblSyncBadge">حساب فلكي محلي</div>
+    </main>
+
+    <!-- 3. HORIZONTAL PRAYER BOXES (ALL SCREEN SIZES - NO BOTTOM TICKER) -->
+    <footer class="prayers-row" id="prayersRow"></footer>
+  </div>
+</div>
+
+<!-- OVERLAYS -->
+<div id="overlayAdhan" class="phase-overlay">
+  <div class="phase-card" style="padding:14px 24px; max-width:540px;">
+    <span id="adhanTopInfo" style="font-size:20px;font-weight:700;"></span>
+  </div>
+  <div class="phase-card">
+    <div class="phase-title" id="adhanMessage">حان الآن موعد أذان العصر</div>
+    <div class="phase-body" id="adhanSubMessage">حيّ على الصلاة • حيّ على الفلاح</div>
+  </div>
+  <div style="display:flex; gap:12px;">
+    <button class="btn-secondary" onclick="stopAdhanAudio()">🔇 كتم الصوت</button>
+    <button class="btn-primary" onclick="dismissCurrentPhase()">متابعة</button>
+  </div>
+</div>
+
+<div id="overlayIqama" class="phase-overlay">
+  <div></div>
+  <div class="phase-card">
+    <div class="phase-title" id="iqamaTitle">العد التنازلي لإقامة الصلاة</div>
+    <div class="phase-big" id="iqamaCountdown">00:00</div>
+    <div class="phase-body" style="margin-top:14px;">يستحب الدعاء بين الأذان والإقامة</div>
+  </div>
+  <button class="btn-secondary" onclick="dismissCurrentPhase()">العودة للشاشة الرئيسية</button>
+</div>
+
+<div id="overlayPhoneOff" class="phase-overlay" style="background:#10161a;">
+  <div></div>
+  <div class="phase-card" style="border-color:#ff6b5b;">
+    <img id="imgPhoneOffPreview" alt="" style="width:160px;height:160px;border-radius:50%;object-fit:cover;margin-bottom:16px;display:none;" />
+    <div id="phoneOffSvg" style="font-size:78px;margin-bottom:12px;">📵</div>
+    <div class="phase-title" style="color:#ff6b5b;">الرجاء إغلاق الهاتف أو وضعه على الصامت</div>
+    <div class="phase-body" id="phoneOffSub">حان الآن وقت إقامة الصلاة • سوّوا صفوفكم</div>
+    <div id="phoneOffSec" style="margin-top:12px;color:#b0bec5;font-size:18px;"></div>
+  </div>
+  <button class="btn-secondary" onclick="dismissCurrentPhase()">إغلاق</button>
+</div>
+
+<div id="overlayAdhkar" class="phase-overlay">
+  <div style="display:flex;justify-content:space-between;width:100%;max-width:920px;">
+    <div class="phase-card" style="padding:10px 20px;width:auto;">
+      <strong style="color:#dfb743;font-size:20px;">أذكار ما بعد الصلاة</strong>
+    </div>
+    <div class="phase-card" style="padding:10px 20px;width:auto;">
+      <span id="adhkarCounter">1 / 6</span>
+    </div>
+  </div>
+  <div class="phase-card">
+    <div class="phase-body" id="adhkarText" style="font-size:28px;font-weight:700;"></div>
+    <div id="adhkarMeta" style="margin-top:18px;color:#dfb743;font-size:18px;"></div>
+  </div>
+  <div style="display:flex; gap:10px;">
+    <button class="btn-secondary" id="btnAdhkarPause" onclick="toggleAdhkarPause()">⏸ إيقاف مؤقت</button>
+    <button class="btn-secondary" onclick="nextAdhkarManual()">التالي ◀</button>
+    <button class="btn-primary" onclick="dismissCurrentPhase()">إغلاق</button>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL (VERTICAL COLLAPSIBLE ACCORDION LIST) -->
+<div id="settingsModal" class="settings-modal">
+  <div class="settings-header">
+    <div>
+      <strong style="font-size:19px;color:#dfb743;">إعدادات المؤذن</strong>
+      <div id="settingsActiveCity" style="color:#c8ded8;font-size:13px;"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn-secondary" id="btnToggleAllAccordions" onclick="toggleAllAccordions()">فتح الكل</button>
+      <button class="btn-primary" onclick="closeSettings()">حفظ وعرض الشاشة</button>
+    </div>
+  </div>
+  <div class="settings-body" id="settingsBody"></div>
+</div>
+
+<div id="quickEditModal" class="quick-modal-backdrop" onclick="if(event.target===this) closeQuickEdit()">
+  <div class="quick-modal-card" id="quickEditCard"></div>
+</div>
+
+<div id="toast" class="toast">تم الحفظ بنجاح</div>
+
+<script>
+// ==================== 1. GLOBAL CATALOG (84+ COUNTRIES / 140+ CITIES) ====================
+const METHODS = {
+  JORDAN_AWQAF: { name: "وزارة الأوقاف الأردنية", fajr: 18.0, isha: 18.0, ishaMin: 0, dhuhrMin: 1, apiId: 23 },
+  UMM_AL_QURA: { name: "أم القرى (السعودية)", fajr: 18.5, isha: 0, ishaMin: 90, dhuhrMin: 1, apiId: 4 },
+  MWL: { name: "رابطة العالم الإسلامي (أوروبا/العالم)", fajr: 18.0, isha: 17.0, ishaMin: 0, dhuhrMin: 1, apiId: 3 },
+  IGMG: { name: "الهيئة الإسلامية في ألمانيا (IGMG)", fajr: 18.0, isha: 16.5, ishaMin: 0, dhuhrMin: 1, apiId: 99 },
+  DIYANET: { name: "رئاسة الشؤون الدينية التركية (DITIB)", fajr: 18.0, isha: 17.0, ishaMin: 0, dhuhrMin: 1, apiId: 13 },
+  EGYPT: { name: "الهيئة المصرية العامة للمساحة", fajr: 19.5, isha: 17.5, ishaMin: 0, dhuhrMin: 1, apiId: 5 },
+  ISNA: { name: "أمريكا الشمالية (ISNA)", fajr: 15.0, isha: 15.0, ishaMin: 0, dhuhrMin: 1, apiId: 2 },
+  KARACHI: { name: "جامعة كراتشي", fajr: 18.0, isha: 18.0, ishaMin: 0, dhuhrMin: 1, apiId: 1 },
+  UAE: { name: "الإمارات العربية المتحدة", fajr: 18.2, isha: 18.2, ishaMin: 0, dhuhrMin: 1, apiId: 16 }
+};
+
+const BUILTIN_CITIES = [
+  // الأردن
+  { id:"jo_amman", cAr:"الأردن", cEn:"Jordan", ar:"عمان", en:"Amman", lat:31.9454, lon:35.9284, tz:"Asia/Amman", method:"JORDAN_AWQAF", highLat:"NONE" },
+  { id:"jo_irbid", cAr:"الأردن", cEn:"Jordan", ar:"إربد", en:"Irbid", lat:32.5568, lon:35.8469, tz:"Asia/Amman", method:"JORDAN_AWQAF", highLat:"NONE" },
+  { id:"jo_zarqa", cAr:"الأردن", cEn:"Jordan", ar:"الزرقاء", en:"Zarqa", lat:32.0728, lon:36.0880, tz:"Asia/Amman", method:"JORDAN_AWQAF", highLat:"NONE" },
+  { id:"jo_aqaba", cAr:"الأردن", cEn:"Jordan", ar:"العقبة", en:"Aqaba", lat:29.5321, lon:35.0063, tz:"Asia/Amman", method:"JORDAN_AWQAF", highLat:"NONE" },
+  { id:"jo_karak", cAr:"الأردن", cEn:"Jordan", ar:"الكرك", en:"Karak", lat:31.1853, lon:35.7048, tz:"Asia/Amman", method:"JORDAN_AWQAF", highLat:"NONE" },
+  // ألمانيا
+  { id:"de_hameln", cAr:"ألمانيا", cEn:"Germany", ar:"هامِلن", en:"Hameln", lat:52.1045, lon:9.3596, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"de_kassel", cAr:"ألمانيا", cEn:"Germany", ar:"كاسل", en:"Kassel", lat:51.3127, lon:9.4797, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"de_hann_muenden", cAr:"ألمانيا", cEn:"Germany", ar:"هان مندن", en:"Hann. Münden", lat:51.4167, lon:9.6500, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"de_berlin", cAr:"ألمانيا", cEn:"Germany", ar:"برلين", en:"Berlin", lat:52.5200, lon:13.4050, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"de_frankfurt", cAr:"ألمانيا", cEn:"Germany", ar:"فرانكفورت", en:"Frankfurt", lat:50.1109, lon:8.6821, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"de_hannover", cAr:"ألمانيا", cEn:"Germany", ar:"هانوفر", en:"Hannover", lat:52.3759, lon:9.7320, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"de_munich", cAr:"ألمانيا", cEn:"Germany", ar:"ميونخ", en:"Munich", lat:48.1351, lon:11.5820, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"de_hamburg", cAr:"ألمانيا", cEn:"Germany", ar:"هامبورغ", en:"Hamburg", lat:53.5511, lon:9.9937, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"de_stuttgart", cAr:"ألمانيا", cEn:"Germany", ar:"شتوتغارت", en:"Stuttgart", lat:48.7758, lon:9.1829, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"de_dusseldorf", cAr:"ألمانيا", cEn:"Germany", ar:"دوسلدورف", en:"Düsseldorf", lat:51.2277, lon:6.7735, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"de_cologne", cAr:"ألمانيا", cEn:"Germany", ar:"كولونيا", en:"Cologne", lat:50.9375, lon:6.9603, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"de_dortmund", cAr:"ألمانيا", cEn:"Germany", ar:"دورتموند", en:"Dortmund", lat:51.5136, lon:7.4653, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"de_bremen", cAr:"ألمانيا", cEn:"Germany", ar:"بريمن", en:"Bremen", lat:53.0793, lon:8.8017, tz:"Europe/Berlin", method:"MWL", highLat:"TWILIGHT" },
+  // السعودية
+  { id:"sa_riyadh", cAr:"السعودية", cEn:"Saudi Arabia", ar:"الرياض", en:"Riyadh", lat:24.7136, lon:46.6753, tz:"Asia/Riyadh", method:"UMM_AL_QURA", highLat:"NONE" },
+  { id:"sa_makkah", cAr:"السعودية", cEn:"Saudi Arabia", ar:"مكة المكرمة", en:"Makkah", lat:21.4225, lon:39.8262, tz:"Asia/Riyadh", method:"UMM_AL_QURA", highLat:"NONE" },
+  { id:"sa_madinah", cAr:"السعودية", cEn:"Saudi Arabia", ar:"المدينة المنورة", en:"Madinah", lat:24.4672, lon:39.6111, tz:"Asia/Riyadh", method:"UMM_AL_QURA", highLat:"NONE" },
+  { id:"sa_jeddah", cAr:"السعودية", cEn:"Saudi Arabia", ar:"جدة", en:"Jeddah", lat:21.5433, lon:39.1728, tz:"Asia/Riyadh", method:"UMM_AL_QURA", highLat:"NONE" },
+  { id:"sa_dammam", cAr:"السعودية", cEn:"Saudi Arabia", ar:"الدمام", en:"Dammam", lat:26.4207, lon:50.0888, tz:"Asia/Riyadh", method:"UMM_AL_QURA", highLat:"NONE" },
+  // فلسطين ومصر والشام والخليج والعراق
+  { id:"ps_jerusalem", cAr:"فلسطين", cEn:"Palestine", ar:"القدس", en:"Jerusalem", lat:31.7683, lon:35.2137, tz:"Asia/Jerusalem", method:"JORDAN_AWQAF", highLat:"NONE" },
+  { id:"ps_gaza", cAr:"فلسطين", cEn:"Palestine", ar:"غزة", en:"Gaza", lat:31.5017, lon:34.4668, tz:"Asia/Gaza", method:"JORDAN_AWQAF", highLat:"NONE" },
+  { id:"eg_cairo", cAr:"مصر", cEn:"Egypt", ar:"القاهرة", en:"Cairo", lat:30.0444, lon:31.2357, tz:"Africa/Cairo", method:"EGYPT", highLat:"NONE" },
+  { id:"eg_alex", cAr:"مصر", cEn:"Egypt", ar:"الإسكندرية", en:"Alexandria", lat:31.2001, lon:29.9187, tz:"Africa/Cairo", method:"EGYPT", highLat:"NONE" },
+  { id:"ae_dubai", cAr:"الإمارات", cEn:"UAE", ar:"دبي", en:"Dubai", lat:25.2048, lon:55.2708, tz:"Asia/Dubai", method:"UAE", highLat:"NONE" },
+  { id:"ae_abudhabi", cAr:"الإمارات", cEn:"UAE", ar:"أبوظبي", en:"Abu Dhabi", lat:24.4539, lon:54.3773, tz:"Asia/Dubai", method:"UAE", highLat:"NONE" },
+  { id:"qa_doha", cAr:"قطر", cEn:"Qatar", ar:"الدوحة", en:"Doha", lat:25.2854, lon:51.5310, tz:"Asia/Qatar", method:"UMM_AL_QURA", highLat:"NONE" },
+  { id:"kw_kuwait", cAr:"الكويت", cEn:"Kuwait", ar:"مدينة الكويت", en:"Kuwait City", lat:29.3759, lon:47.9774, tz:"Asia/Kuwait", method:"UMM_AL_QURA", highLat:"NONE" },
+  { id:"bh_manama", cAr:"البحرين", cEn:"Bahrain", ar:"المنامة", en:"Manama", lat:26.2285, lon:50.5860, tz:"Asia/Bahrain", method:"UMM_AL_QURA", highLat:"NONE" },
+  { id:"om_muscat", cAr:"عُمان", cEn:"Oman", ar:"مسقط", en:"Muscat", lat:23.5880, lon:58.3829, tz:"Asia/Muscat", method:"UMM_AL_QURA", highLat:"NONE" },
+  { id:"ye_sanaa", cAr:"اليمن", cEn:"Yemen", ar:"صنعاء", en:"Sanaa", lat:15.3694, lon:44.1910, tz:"Asia/Aden", method:"UMM_AL_QURA", highLat:"NONE" },
+  { id:"sy_damascus", cAr:"سوريا", cEn:"Syria", ar:"دمشق", en:"Damascus", lat:33.5138, lon:36.2765, tz:"Asia/Damascus", method:"MWL", highLat:"NONE" },
+  { id:"lb_beirut", cAr:"لبنان", cEn:"Lebanon", ar:"بيروت", en:"Beirut", lat:33.8938, lon:35.5018, tz:"Asia/Beirut", method:"EGYPT", highLat:"NONE" },
+  { id:"iq_baghdad", cAr:"العراق", cEn:"Iraq", ar:"بغداد", en:"Baghdad", lat:33.3152, lon:44.3661, tz:"Asia/Baghdad", method:"MWL", highLat:"NONE" },
+  { id:"iq_erbil", cAr:"العراق", cEn:"Iraq", ar:"أربيل", en:"Erbil", lat:36.1911, lon:44.0092, tz:"Asia/Baghdad", method:"MWL", highLat:"NONE" },
+  // المغرب العربي وشرق أفريقيا العربية
+  { id:"ma_rabat", cAr:"المغرب", cEn:"Morocco", ar:"الرباط", en:"Rabat", lat:34.0209, lon:-6.8416, tz:"Africa/Casablanca", method:"MWL", highLat:"NONE" },
+  { id:"ma_casablanca", cAr:"المغرب", cEn:"Morocco", ar:"الدار البيضاء", en:"Casablanca", lat:33.5731, lon:-7.5898, tz:"Africa/Casablanca", method:"MWL", highLat:"NONE" },
+  { id:"dz_algiers", cAr:"الجزائر", cEn:"Algeria", ar:"الجزائر", en:"Algiers", lat:36.7538, lon:3.0588, tz:"Africa/Algiers", method:"MWL", highLat:"NONE" },
+  { id:"tn_tunis", cAr:"تونس", cEn:"Tunisia", ar:"تونس", en:"Tunis", lat:36.8065, lon:10.1815, tz:"Africa/Tunis", method:"MWL", highLat:"NONE" },
+  { id:"ly_tripoli", cAr:"ليبيا", cEn:"Libya", ar:"طرابلس", en:"Tripoli", lat:32.8872, lon:13.1913, tz:"Africa/Tripoli", method:"EGYPT", highLat:"NONE" },
+  { id:"sd_khartoum", cAr:"السودان", cEn:"Sudan", ar:"الخرطوم", en:"Khartoum", lat:15.5007, lon:32.5599, tz:"Africa/Khartoum", method:"EGYPT", highLat:"NONE" },
+  { id:"mr_nouakchott", cAr:"موريتانيا", cEn:"Mauritania", ar:"نواكشوط", en:"Nouakchott", lat:18.0735, lon:-15.9582, tz:"Africa/Nouakchott", method:"MWL", highLat:"NONE" },
+  { id:"so_mogadishu", cAr:"الصومال", cEn:"Somalia", ar:"مقديشو", en:"Mogadishu", lat:2.0469, lon:45.3182, tz:"Africa/Mogadishu", method:"MWL", highLat:"NONE" },
+  { id:"dj_djibouti", cAr:"جيبوتي", cEn:"Djibouti", ar:"جيبوتي", en:"Djibouti", lat:11.5721, lon:43.1456, tz:"Africa/Djibouti", method:"MWL", highLat:"NONE" },
+  { id:"km_moroni", cAr:"جزر القمر", cEn:"Comoros", ar:"موروني", en:"Moroni", lat:-11.7172, lon:43.2473, tz:"Indian/Comoro", method:"MWL", highLat:"NONE" },
+  // تركيا وأوروبا
+  { id:"tr_istanbul", cAr:"تركيا", cEn:"Turkey", ar:"إسطنبول", en:"Istanbul", lat:41.0082, lon:28.9784, tz:"Europe/Istanbul", method:"DIYANET", highLat:"TWILIGHT" },
+  { id:"tr_ankara", cAr:"تركيا", cEn:"Turkey", ar:"أنقرة", en:"Ankara", lat:39.9334, lon:32.8597, tz:"Europe/Istanbul", method:"DIYANET", highLat:"TWILIGHT" },
+  { id:"uk_london", cAr:"المملكة المتحدة", cEn:"United Kingdom", ar:"لندن", en:"London", lat:51.5072, lon:-0.1276, tz:"Europe/London", method:"MWL", highLat:"TWILIGHT" },
+  { id:"uk_birmingham", cAr:"المملكة المتحدة", cEn:"United Kingdom", ar:"برمنغهام", en:"Birmingham", lat:52.4862, lon:-1.8904, tz:"Europe/London", method:"MWL", highLat:"TWILIGHT" },
+  { id:"fr_paris", cAr:"فرنسا", cEn:"France", ar:"باريس", en:"Paris", lat:48.8566, lon:2.3522, tz:"Europe/Paris", method:"MWL", highLat:"TWILIGHT" },
+  { id:"fr_lyon", cAr:"فرنسا", cEn:"France", ar:"ليون", en:"Lyon", lat:45.7640, lon:4.8357, tz:"Europe/Paris", method:"MWL", highLat:"TWILIGHT" },
+  { id:"nl_amsterdam", cAr:"هولندا", cEn:"Netherlands", ar:"أمستردام", en:"Amsterdam", lat:52.3676, lon:4.9041, tz:"Europe/Amsterdam", method:"MWL", highLat:"TWILIGHT" },
+  { id:"be_brussels", cAr:"بلجيكا", cEn:"Belgium", ar:"بروكسل", en:"Brussels", lat:50.8503, lon:4.3517, tz:"Europe/Brussels", method:"MWL", highLat:"TWILIGHT" },
+  { id:"at_vienna", cAr:"النمسا", cEn:"Austria", ar:"فيينا", en:"Vienna", lat:48.2082, lon:16.3738, tz:"Europe/Vienna", method:"IGMG", highLat:"TWILIGHT" },
+  { id:"ch_zurich", cAr:"سويسرا", cEn:"Switzerland", ar:"زيورخ", en:"Zurich", lat:47.3769, lon:8.5417, tz:"Europe/Zurich", method:"MWL", highLat:"TWILIGHT" },
+  { id:"se_stockholm", cAr:"السويد", cEn:"Sweden", ar:"ستوكهولم", en:"Stockholm", lat:59.3293, lon:18.0686, tz:"Europe/Stockholm", method:"MWL", highLat:"TWILIGHT" },
+  { id:"no_oslo", cAr:"النرويج", cEn:"Norway", ar:"أوسلو", en:"Oslo", lat:59.9139, lon:10.7522, tz:"Europe/Oslo", method:"MWL", highLat:"TWILIGHT" },
+  { id:"dk_copenhagen", cAr:"الدنمارك", cEn:"Denmark", ar:"كوبنهاغن", en:"Copenhagen", lat:55.6761, lon:12.5683, tz:"Europe/Copenhagen", method:"MWL", highLat:"TWILIGHT" },
+  { id:"fi_helsinki", cAr:"فنلندا", cEn:"Finland", ar:"هلسنكي", en:"Helsinki", lat:60.1699, lon:24.9384, tz:"Europe/Helsinki", method:"MWL", highLat:"TWILIGHT" },
+  { id:"es_madrid", cAr:"إسبانيا", cEn:"Spain", ar:"مدريد", en:"Madrid", lat:40.4168, lon:-3.7038, tz:"Europe/Madrid", method:"MWL", highLat:"NONE" },
+  { id:"it_rome", cAr:"إيطاليا", cEn:"Italy", ar:"روما", en:"Rome", lat:41.9028, lon:12.4964, tz:"Europe/Rome", method:"MWL", highLat:"NONE" },
+  { id:"pt_lisbon", cAr:"البرتغال", cEn:"Portugal", ar:"لشبونة", en:"Lisbon", lat:38.7223, lon:-9.1393, tz:"Europe/Lisbon", method:"MWL", highLat:"NONE" },
+  { id:"ie_dublin", cAr:"أيرلندا", cEn:"Ireland", ar:"دبلن", en:"Dublin", lat:53.3498, lon:-6.2603, tz:"Europe/Dublin", method:"MWL", highLat:"TWILIGHT" },
+  { id:"gr_athens", cAr:"اليونان", cEn:"Greece", ar:"أثينا", en:"Athens", lat:37.9838, lon:23.7275, tz:"Europe/Athens", method:"MWL", highLat:"NONE" },
+  { id:"pl_warsaw", cAr:"بولندا", cEn:"Poland", ar:"وارسو", en:"Warsaw", lat:52.2297, lon:21.0122, tz:"Europe/Warsaw", method:"MWL", highLat:"TWILIGHT" },
+  { id:"cz_prague", cAr:"التشيك", cEn:"Czechia", ar:"براغ", en:"Prague", lat:50.0755, lon:14.4378, tz:"Europe/Prague", method:"MWL", highLat:"TWILIGHT" },
+  { id:"hu_budapest", cAr:"المجر", cEn:"Hungary", ar:"بودابست", en:"Budapest", lat:47.4979, lon:19.0402, tz:"Europe/Budapest", method:"MWL", highLat:"TWILIGHT" },
+  { id:"ro_bucharest", cAr:"رومانيا", cEn:"Romania", ar:"بوخارست", en:"Bucharest", lat:44.4268, lon:26.1025, tz:"Europe/Bucharest", method:"MWL", highLat:"NONE" },
+  { id:"bg_sofia", cAr:"بلغاريا", cEn:"Bulgaria", ar:"صوفيا", en:"Sofia", lat:42.6977, lon:23.3219, tz:"Europe/Sofia", method:"MWL", highLat:"NONE" },
+  { id:"ba_sarajevo", cAr:"البوسنة والهرسك", cEn:"Bosnia", ar:"سراييفو", en:"Sarajevo", lat:43.8563, lon:18.4131, tz:"Europe/Sarajevo", method:"DIYANET", highLat:"NONE" },
+  { id:"al_tirana", cAr:"ألبانيا", cEn:"Albania", ar:"تيرانا", en:"Tirana", lat:41.3275, lon:19.8187, tz:"Europe/Tirane", method:"DIYANET", highLat:"NONE" },
+  { id:"ru_moscow", cAr:"روسيا", cEn:"Russia", ar:"موسكو", en:"Moscow", lat:55.7558, lon:37.6173, tz:"Europe/Moscow", method:"MWL", highLat:"TWILIGHT" },
+  { id:"ua_kyiv", cAr:"أوكرانيا", cEn:"Ukraine", ar:"كييف", en:"Kyiv", lat:50.4501, lon:30.5234, tz:"Europe/Kyiv", method:"MWL", highLat:"TWILIGHT" },
+  // آسيا
+  { id:"pk_karachi", cAr:"باكستان", cEn:"Pakistan", ar:"كراتشي", en:"Karachi", lat:24.8607, lon:67.0011, tz:"Asia/Karachi", method:"KARACHI", madhab:"HANAFI", highLat:"NONE" },
+  { id:"pk_lahore", cAr:"باكستان", cEn:"Pakistan", ar:"لاهور", en:"Lahore", lat:31.5204, lon:74.3587, tz:"Asia/Karachi", method:"KARACHI", madhab:"HANAFI", highLat:"NONE" },
+  { id:"in_delhi", cAr:"الهند", cEn:"India", ar:"نيودلهي", en:"New Delhi", lat:28.6139, lon:77.2090, tz:"Asia/Kolkata", method:"KARACHI", madhab:"HANAFI", highLat:"NONE" },
+  { id:"bd_dhaka", cAr:"بنغلاديش", cEn:"Bangladesh", ar:"دكا", en:"Dhaka", lat:23.8103, lon:90.4125, tz:"Asia/Dhaka", method:"KARACHI", madhab:"HANAFI", highLat:"NONE" },
+  { id:"id_jakarta", cAr:"إندونيسيا", cEn:"Indonesia", ar:"جاكرتا", en:"Jakarta", lat:-6.2088, lon:106.8456, tz:"Asia/Jakarta", method:"MWL", highLat:"NONE" },
+  { id:"my_kualalumpur", cAr:"ماليزيا", cEn:"Malaysia", ar:"كوالالمبور", en:"Kuala Lumpur", lat:3.1390, lon:101.6869, tz:"Asia/Kuala_Lumpur", method:"MWL", highLat:"NONE" },
+  { id:"sg_singapore", cAr:"سنغافورة", cEn:"Singapore", ar:"سنغافورة", en:"Singapore", lat:1.3521, lon:103.8198, tz:"Asia/Singapore", method:"MWL", highLat:"NONE" },
+  { id:"bn_bandar", cAr:"بروناي", cEn:"Brunei", ar:"بندر سري بكاوان", en:"Bandar Seri Begawan", lat:4.9031, lon:114.9398, tz:"Asia/Brunei", method:"MWL", highLat:"NONE" },
+  { id:"af_kabul", cAr:"أفغانستان", cEn:"Afghanistan", ar:"كابل", en:"Kabul", lat:34.5553, lon:69.2075, tz:"Asia/Kabul", method:"KARACHI", madhab:"HANAFI", highLat:"NONE" },
+  { id:"ir_tehran", cAr:"إيران", cEn:"Iran", ar:"طهران", en:"Tehran", lat:35.6892, lon:51.3890, tz:"Asia/Tehran", method:"MWL", highLat:"NONE" },
+  { id:"az_baku", cAr:"أذربيجان", cEn:"Azerbaijan", ar:"باكو", en:"Baku", lat:40.4093, lon:49.8671, tz:"Asia/Baku", method:"MWL", highLat:"NONE" },
+  { id:"uz_tashkent", cAr:"أوزبكستان", cEn:"Uzbekistan", ar:"طشقند", en:"Tashkent", lat:41.2995, lon:69.2401, tz:"Asia/Tashkent", method:"MWL", madhab:"HANAFI", highLat:"NONE" },
+  { id:"kz_almaty", cAr:"كازاخستان", cEn:"Kazakhstan", ar:"ألماتي", en:"Almaty", lat:43.2220, lon:76.8512, tz:"Asia/Almaty", method:"MWL", madhab:"HANAFI", highLat:"NONE" },
+  { id:"kg_bishkek", cAr:"قيرغيزستان", cEn:"Kyrgyzstan", ar:"بشكيك", en:"Bishkek", lat:42.8746, lon:74.5698, tz:"Asia/Bishkek", method:"MWL", madhab:"HANAFI", highLat:"NONE" },
+  { id:"tj_dushanbe", cAr:"طاجيكستان", cEn:"Tajikistan", ar:"دوشنبه", en:"Dushanbe", lat:38.5598, lon:68.7870, tz:"Asia/Dushanbe", method:"MWL", madhab:"HANAFI", highLat:"NONE" },
+  { id:"mv_male", cAr:"المالديف", cEn:"Maldives", ar:"ماليه", en:"Malé", lat:4.1755, lon:73.5093, tz:"Indian/Maldives", method:"MWL", highLat:"NONE" },
+  { id:"lk_colombo", cAr:"سريلانكا", cEn:"Sri Lanka", ar:"كولومبو", en:"Colombo", lat:6.9271, lon:79.8612, tz:"Asia/Colombo", method:"MWL", highLat:"NONE" },
+  { id:"th_bangkok", cAr:"تايلاند", cEn:"Thailand", ar:"بانكوك", en:"Bangkok", lat:13.7563, lon:100.5018, tz:"Asia/Bangkok", method:"MWL", highLat:"NONE" },
+  { id:"jp_tokyo", cAr:"اليابان", cEn:"Japan", ar:"طوكيو", en:"Tokyo", lat:35.6762, lon:139.6503, tz:"Asia/Tokyo", method:"MWL", highLat:"NONE" },
+  { id:"kr_seoul", cAr:"كوريا الجنوبية", cEn:"South Korea", ar:"سول", en:"Seoul", lat:37.5665, lon:126.9780, tz:"Asia/Seoul", method:"MWL", highLat:"NONE" },
+  { id:"cn_beijing", cAr:"الصين", cEn:"China", ar:"بكين", en:"Beijing", lat:39.9042, lon:116.4074, tz:"Asia/Shanghai", method:"MWL", highLat:"NONE" },
+  { id:"ph_manila", cAr:"الفلبين", cEn:"Philippines", ar:"مانيلا", en:"Manila", lat:14.5995, lon:120.9842, tz:"Asia/Manila", method:"MWL", highLat:"NONE" },
+  // أفريقيا
+  { id:"ng_lagos", cAr:"نيجيريا", cEn:"Nigeria", ar:"لاغوس", en:"Lagos", lat:6.5244, lon:3.3792, tz:"Africa/Lagos", method:"MWL", highLat:"NONE" },
+  { id:"sn_dakar", cAr:"السنغال", cEn:"Senegal", ar:"داكار", en:"Dakar", lat:14.7167, lon:-17.4677, tz:"Africa/Dakar", method:"MWL", highLat:"NONE" },
+  { id:"ml_bamako", cAr:"مالي", cEn:"Mali", ar:"باماكو", en:"Bamako", lat:12.6392, lon:-8.0029, tz:"Africa/Bamako", method:"MWL", highLat:"NONE" },
+  { id:"ne_niamey", cAr:"النيجر", cEn:"Niger", ar:"نيامي", en:"Niamey", lat:13.5116, lon:2.1254, tz:"Africa/Niamey", method:"MWL", highLat:"NONE" },
+  { id:"td_ndjamena", cAr:"تشاد", cEn:"Chad", ar:"انجمينا", en:"N'Djamena", lat:12.1348, lon:15.0557, tz:"Africa/Ndjamena", method:"MWL", highLat:"NONE" },
+  { id:"et_addisababa", cAr:"إثيوبيا", cEn:"Ethiopia", ar:"أديس أبابا", en:"Addis Ababa", lat:9.0320, lon:38.7469, tz:"Africa/Addis_Ababa", method:"EGYPT", highLat:"NONE" },
+  { id:"ke_nairobi", cAr:"كينيا", cEn:"Kenya", ar:"نيروبي", en:"Nairobi", lat:-1.2921, lon:36.8219, tz:"Africa/Nairobi", method:"MWL", highLat:"NONE" },
+  { id:"tz_daressalaam", cAr:"تنزانيا", cEn:"Tanzania", ar:"دار السلام", en:"Dar es Salaam", lat:-6.7924, lon:39.2083, tz:"Africa/Dar_es_Salaam", method:"MWL", highLat:"NONE" },
+  { id:"gh_accra", cAr:"غانا", cEn:"Ghana", ar:"أكرا", en:"Accra", lat:5.6037, lon:-0.1870, tz:"Africa/Accra", method:"MWL", highLat:"NONE" },
+  { id:"za_johannesburg", cAr:"جنوب أفريقيا", cEn:"South Africa", ar:"جوهانسبرغ", en:"Johannesburg", lat:-26.2041, lon:28.0473, tz:"Africa/Johannesburg", method:"MWL", highLat:"NONE" },
+  // الأمريكتان وأوقيانوسيا
+  { id:"us_newyork", cAr:"الولايات المتحدة", cEn:"United States", ar:"نيويورك", en:"New York", lat:40.7128, lon:-74.0060, tz:"America/New_York", method:"ISNA", highLat:"NONE" },
+  { id:"us_chicago", cAr:"الولايات المتحدة", cEn:"United States", ar:"شيكاغو", en:"Chicago", lat:41.8781, lon:-87.6298, tz:"America/Chicago", method:"ISNA", highLat:"NONE" },
+  { id:"us_losangeles", cAr:"الولايات المتحدة", cEn:"United States", ar:"لوس أنجلوس", en:"Los Angeles", lat:34.0522, lon:-118.2437, tz:"America/Los_Angeles", method:"ISNA", highLat:"NONE" },
+  { id:"ca_toronto", cAr:"كندا", cEn:"Canada", ar:"تورونتو", en:"Toronto", lat:43.6532, lon:-79.3832, tz:"America/Toronto", method:"ISNA", highLat:"NONE" },
+  { id:"ca_montreal", cAr:"كندا", cEn:"Canada", ar:"مونتريال", en:"Montreal", lat:45.5017, lon:-73.5673, tz:"America/Toronto", method:"ISNA", highLat:"TWILIGHT" },
+  { id:"mx_mexicocity", cAr:"المكسيك", cEn:"Mexico", ar:"مكسيكو سيتي", en:"Mexico City", lat:19.4326, lon:-99.1332, tz:"America/Mexico_City", method:"ISNA", highLat:"NONE" },
+  { id:"br_saopaulo", cAr:"البرازيل", cEn:"Brazil", ar:"ساو باولو", en:"São Paulo", lat:-23.5505, lon:-46.6333, tz:"America/Sao_Paulo", method:"MWL", highLat:"NONE" },
+  { id:"ar_buenosaires", cAr:"الأرجنتين", cEn:"Argentina", ar:"بوينس آيرس", en:"Buenos Aires", lat:-34.6037, lon:-58.3816, tz:"America/Argentina/Buenos_Aires", method:"MWL", highLat:"NONE" },
+  { id:"cl_santiago", cAr:"تشيلي", cEn:"Chile", ar:"سانتياغو", en:"Santiago", lat:-33.4489, lon:-70.6693, tz:"America/Santiago", method:"MWL", highLat:"NONE" },
+  { id:"co_bogota", cAr:"كولومبيا", cEn:"Colombia", ar:"بوغوتا", en:"Bogotá", lat:4.7110, lon:-74.0721, tz:"America/Bogota", method:"MWL", highLat:"NONE" },
+  { id:"au_sydney", cAr:"أستراليا", cEn:"Australia", ar:"سيدني", en:"Sydney", lat:-33.8688, lon:151.2093, tz:"Australia/Sydney", method:"MWL", highLat:"NONE" },
+  { id:"au_melbourne", cAr:"أستراليا", cEn:"Australia", ar:"ملبورن", en:"Melbourne", lat:-37.8136, lon:144.9631, tz:"Australia/Melbourne", method:"MWL", highLat:"NONE" },
+  { id:"nz_auckland", cAr:"نيوزيلندا", cEn:"New Zealand", ar:"أوكلاند", en:"Auckland", lat:-36.8485, lon:174.7633, tz:"Pacific/Auckland", method:"MWL", highLat:"NONE" }
+];
+
+const DEFAULT_ADHKAR = [
+  { text: "أَسْتَغْفِرُ اللَّهَ، أَسْتَغْفِرُ اللَّهَ، أَسْتَغْفِرُ اللَّهَ.\nاللَّهُمَّ أَنْتَ السَّلَامُ، وَمِنْكَ السَّلَامُ، تَبَارَكْتَ يَا ذَا الْجَلَالِ وَالْإِكْرَامِ.", meta: "ثلاثاً ثم الدعاء بعد السلام • رواه مسلم", enabled: true },
+  { text: "لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ، اللَّهُمَّ لَا مَانِعَ لِمَا أَعْطَيْتَ، وَلَا مُعْطِيَ لِمَا مَنَعْتَ، وَلَا يَنْفَعُ ذَا الْجَدِّ مِنْكَ الْجَدُّ.", meta: "مرة واحدة بعد كل صلاة • متفق عليه", enabled: true },
+  { text: "لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ، لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ، لَا إِلَٰهَ إِلَّا اللَّهُ، وَلَا نَعْبُدُ إِلَّا إِيَّاهُ، لَهُ النِّعْمَةُ وَلَهُ الْفَضْلُ وَلَهُ الثَّنَاءُ الْحَسَنُ، لَا إِلَٰهَ إِلَّا اللَّهُ مُخْلِصِينَ لَهُ الدِّينَ وَلَوْ كَرِهَ الْكَافِرُونَ.", meta: "مرة واحدة • رواه مسلم", enabled: true },
+  { text: "لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، يُحْيِي وَيُمِيتُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ.", meta: "عشر مرات بعد الفجر والمغرب، ومرة بعد الصلوات الأخرى • رواه الترمذي", enabled: true },
+  { text: "اللَّهُمَّ إِنِّي أَسْأَلُكَ عِلْمًا نَافِعًا، وَرِزْقًا طَيِّبًا، وَعَمَلًا مُتَقَبَّلًا.", meta: "مرة واحدة بعد صلاة الفجر والصلوات • رواه ابن ماجه", enabled: true },
+  { text: "اللَّهُمَّ أَجِرْنِي مِنَ النَّارِ.", meta: "ثلاث مرات بعد صلاتي الفجر والمغرب، ومرة بعد الصلوات الأخرى • رواه أبو داود", enabled: true },
+  { text: "اللَّهُمَّ أَعِنِّي عَلَىٰ ذِكْرِكَ، وَشُكْرِكَ، وَحُسْنِ عِبَادَتِكَ.", meta: "ثلاث مرات بعد صلاتي الفجر والمغرب، ومرة بعد الصلوات الأخرى • رواه أبو داود والنسائي", enabled: true },
+  { text: "أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ\nاللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ۚ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ ۚ لَهُ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ ۗ مَنْ ذَا الَّذِي يَشْفَعُ عِنْدَهُ إِلَّا بِإِذْنِهِ ۚ يَعْلَمُ مَا بَيْنَ أَيْدِيهِمْ وَمَا خَلْفَهُمْ ۖ وَلَا يُحِيطُونَ بِشَيْءٍ مِنْ عِلْمِهِ إِلَّا بِمَا شَاءَ ۚ وَسِعَ كُرْسِيُّهُ السَّمَاوَاتِ وَالْأَرْضَ ۖ وَلَا يَؤُودُهُ حِفْظُهُمَا ۚ وَهُوَ الْعَلِيُّ الْعَظِيمُ ۝٢٥٥", meta: "مرة واحدة بعد كل صلاة • آية الكرسي - البقرة ٢٥٥", enabled: true },
+  { text: "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ\nقُلْ هُوَ اللَّهُ أَحَدٌ ۝١ اللَّهُ الصَّمَدُ ۝٢ لَمْ يَلِدْ وَلَمْ يُولَدْ ۝٣ وَلَمْ يَكُنْ لَهُ كُفُوًا أَحَدٌ ۝٤", meta: "ثلاث مرات بعد الفجر والمغرب، ومرة بعد الصلوات الأخرى • سورة الإخلاص", enabled: true },
+  { text: "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ\nقُلْ أَعُوذُ بِرَبِّ الْفَلَقِ ۝١ مِنْ شَرِّ مَا خَلَقَ ۝٢ وَمِنْ شَرِّ غَاسِقٍ إِذَا وَقَبَ ۝٣ وَمِنْ شَرِّ النَّفَّاثَاتِ فِي الْعُقَدِ ۝٤ وَمِنْ شَرِّ حَاسِدٍ إِذَا حَسَدَ ۝٥", meta: "ثلاث مرات بعد الفجر والمغرب، ومرة بعد الصلوات الأخرى • سورة الفلق", enabled: true },
+  { text: "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ\nقُلْ أَعُوذُ بِرَبِّ النَّاسِ ۝١ مَلِكِ النَّاسِ ۝٢ إِلَٰهِ النَّاسِ ۝٣ مِنْ شَرِّ الْوَسْوَاسِ الْخَنَّاسِ ۝٤ الَّذِي يُوَسْوِسُ فِي صُدُورِ النَّاسِ ۝٥ مِنَ الْجِنَّةِ وَالنَّاسِ ۝٦", meta: "ثلاث مرات بعد الفجر والمغرب، ومرة بعد الصلوات الأخرى • سورة الناس", enabled: true },
+  { text: "سُبْحَانَ اللَّهِ (٣٣ مرة)\nالْحَمْدُ لِلَّهِ (٣٣ مرة)\nاللَّهُ أَكْبَرُ (٣٣ مرة)", meta: "ثلاثاً وثلاثين مرة بعد كل صلاة • رواه مسلم", enabled: true },
+  { text: "لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ.", meta: "تمام المائة بعد التسبيح • رواه مسلم", enabled: true }
+];
+
+const PRAYERS = [
+  { key: "fajr", ar: "الفجر", iqamaDef: 20 },
+  { key: "dhuhr", ar: "الظهر", iqamaDef: 15 },
+  { key: "asr", ar: "العصر", iqamaDef: 15 },
+  { key: "maghrib", ar: "المغرب", iqamaDef: 10 },
+  { key: "isha", ar: "العشاء", iqamaDef: 15 }
+];
+
+const DEFAULT_COLORS = {
+  screenBg: "#090b12",
+  headerBg: "transparent",
+  headerText: "#ffffff",
+  boxBorder: "rgba(255, 255, 255, 0.22)",
+  clockBg: "rgba(91, 27, 153, 0.82)",
+  clockText: "#ffffff",
+  clockAccent: "#eae0ff",
+  dateText: "#ffffff",
+  nextBg: "rgba(20, 23, 32, 0.86)",
+  nextText: "#ffffff",
+  prayerBg: "rgba(18, 22, 31, 0.76)",
+  prayerText: "#ffffff",
+  accent: "rgba(106, 27, 154, 0.88)",
+  sunriseBg: "transparent",
+  sunriseText: "#ffffff",
+  jumuahBg: "transparent",
+  jumuahText: "#ffffff",
+  uiButtonBg: "rgba(0, 0, 0, 0.40)",
+  uiButtonText: "#ffffff"
+};
+
+const DEFAULT_SETTINGS = {
+  id: 1,
+  selectedCityId: "jo_amman",
+  mosqueName: "مسجد النور",
+  is24Hour: false,
+  hijriOffset: 0,
+  dimEnabled: false,
+  dimAlpha: 0.35,
+  bgScrimAlpha: 0.20,
+  showWeather: true,
+  showHijri: true,
+  showGreg: true,
+  showSunrise: true,
+  showJumuah: true,
+  showNextPrayer: true,
+  adhanAudioEnabled: true,
+  adhanDisplaySec: 120,
+  phoneOffSec: 20,
+  adhkarEnabled: true,
+  adhkarDelaySec: 5,
+  adhkarTotalSec: 180,
+  adhkarItemSec: 15,
+  fontFamily: '"Segoe UI", Tahoma, Arial, sans-serif',
+  clockScale: 1.0,
+  countdownScale: 1.0,
+  textScale: 1.0,
+  colors: structuredClone(DEFAULT_COLORS),
+  cachedWeather: null
+};
+
+// ==================== 2. DUAL PERSISTENCE (IndexedDB + localStorage) ====================
+const DB_NAME = "almoazin_mosque_web_v3";
+const DB_VERSION = 2;
+const LS_PREFIX = "almoazin_v3_";
+let dbPromise = null;
+
+function openDb() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    try {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("settings")) db.createObjectStore("settings", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("cities")) db.createObjectStore("cities", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("media")) db.createObjectStore("media", { keyPath: "slot" });
+        if (!db.objectStoreNames.contains("cachedSchedules")) db.createObjectStore("cachedSchedules", { keyPath: "cacheKey" });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+  return dbPromise;
+}
+
+function lsGet(k, def = null) {
+  try {
+    const raw = localStorage.getItem(LS_PREFIX + k);
+    return raw ? JSON.parse(raw) : def;
+  } catch (_) { return def; }
+}
+function lsSet(k, v) {
+  try { localStorage.setItem(LS_PREFIX + k, JSON.stringify(v)); } catch (_) {}
+}
+
+async function dbGet(store, key) {
+  try {
+    const db = await openDb();
+    return await new Promise((res, rej) => {
+      const tx = db.transaction(store, "readonly");
+      const req = tx.objectStore(store).get(key);
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+  } catch (_) { return null; }
+}
+
+async function dbGetAll(store) {
+  try {
+    const db = await openDb();
+    return await new Promise((res, rej) => {
+      const tx = db.transaction(store, "readonly");
+      const req = tx.objectStore(store).getAll();
+      req.onsuccess = () => res(req.result || []);
+      req.onerror = () => rej(req.error);
+    });
+  } catch (_) { return []; }
+}
+
+async function dbPut(store, value) {
+  try {
+    const db = await openDb();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(store, "readwrite");
+      tx.objectStore(store).put(value);
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+    });
+  } catch (_) {}
+}
+
+async function dbDelete(store, key) {
+  try {
+    const db = await openDb();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(store, "readwrite");
+      tx.objectStore(store).delete(key);
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+    });
+  } catch (_) {}
+}
+
+// ==================== 3. ASTRONOMICAL ENGINE + DST + ONLINE SYNC ====================
+const D2R = Math.PI / 180;
+const R2D = 180 / Math.PI;
+const mod = (a, b) => ((a % b) + b) % b;
+
+function julianDay(y, m, d) {
+  if (m <= 2) { y -= 1; m += 12; }
+  const A = Math.floor(y / 100);
+  const B = 2 - A + Math.floor(A / 4);
+  return Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d + B - 1524.5;
+}
+
+function sunPos(jd) {
+  const d = jd - 2451545.0;
+  const g = mod(357.529 + 0.98560028 * d, 360);
+  const q = mod(280.459 + 0.98564736 * d, 360);
+  const L = mod(q + 1.915 * Math.sin(g * D2R) + 0.020 * Math.sin(2 * g * D2R), 360);
+  const e = 23.439 - 0.00000036 * d;
+  const RA = mod(Math.atan2(Math.cos(e * D2R) * Math.sin(L * D2R), Math.cos(L * D2R)) * R2D / 15, 24);
+  const decl = Math.asin(Math.sin(e * D2R) * Math.sin(L * D2R)) * R2D;
+  let eot = q / 15 - RA;
+  if (eot > 12) eot -= 24;
+  if (eot < -12) eot += 24;
+  return { decl, eot };
+}
+
+function getTzOffsetHours(tz, year, month, day) {
+  try {
+    const utc = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+    const tzDate = new Date(utc.toLocaleString("en-US", { timeZone: tz }));
+    const utcDate = new Date(utc.toLocaleString("en-US", { timeZone: "UTC" }));
+    return (tzDate - utcDate) / 3600000;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function resolveDstInfo(cityCfg, y, m, d) {
+  const jan = getTzOffsetHours(cityCfg.tz, y, 1, 15);
+  const jul = getTzOffsetHours(cityCfg.tz, y, 7, 15);
+  const stdHours = Math.min(jan, jul);
+  const autoHours = getTzOffsetHours(cityCfg.tz, y, m, d);
+  const autoDst = autoHours > stdHours;
+  const mode = cityCfg.dstMode || "AUTO";
+  let effectiveHours = autoHours;
+  let isDst = autoDst;
+  if (mode === "FORCE_SUMMER") {
+    effectiveHours = Math.max(jan, jul) === stdHours ? stdHours + 1 : Math.max(jan, jul);
+    isDst = true;
+  } else if (mode === "FORCE_WINTER") {
+    effectiveHours = stdHours;
+    isDst = false;
+  }
+  const deltaMin = Math.round((effectiveHours - autoHours) * 60);
+  return { autoHours, effectiveHours, isDst, deltaMin };
+}
+
+function sunAngleTime(jd, lat, lon, tzH, angle, afterNoon) {
+  const s = sunPos(jd);
+  const mid = 12 + tzH - lon / 15 - s.eot;
+  const cosH = (-Math.sin(angle * D2R) - Math.sin(lat * D2R) * Math.sin(s.decl * D2R)) /
+               (Math.cos(lat * D2R) * Math.cos(s.decl * D2R));
+  if (cosH < -1 || cosH > 1) return null;
+  const t = Math.acos(cosH) * R2D / 15;
+  return afterNoon ? mid + t : mid - t;
+}
+
+function asrTime(jd, lat, lon, tzH, factor) {
+  const s = sunPos(jd);
+  const mid = 12 + tzH - lon / 15 - s.eot;
+  const alt = Math.atan(1 / (factor + Math.tan(Math.abs(lat - s.decl) * D2R)));
+  const cosH = Math.max(-1, Math.min(1,
+    (Math.sin(alt) - Math.sin(lat * D2R) * Math.sin(s.decl * D2R)) /
+    (Math.cos(lat * D2R) * Math.cos(s.decl * D2R))
+  ));
+  return mid + Math.acos(cosH) * R2D / 15;
+}
+
+function buildCitySignature(c) {
+  return [
+    c.method || "MWL",
+    c.madhab || "SHAFI",
+    c.highLat || "TWILIGHT",
+    c.customFajrAngle ?? "d",
+    c.customIshaAngle ?? "d",
+    c.customIshaMin ?? "d",
+    Number(c.lat).toFixed(4),
+    Number(c.lon).toFixed(4),
+    c.tz
+  ].join("|");
+}
+
+function parseHmToMin(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  const m = raw.trim().match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const hh = Number(m[1]), mm = Number(m[2]);
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return hh * 60 + mm;
+}
+
+function validateAlAdhanTimings(timings) {
+  if (!timings) return null;
+  const fajr = parseHmToMin(timings.Fajr);
+  const sunrise = parseHmToMin(timings.Sunrise);
+  const dhuhr = parseHmToMin(timings.Dhuhr);
+  const asr = parseHmToMin(timings.Asr);
+  const maghrib = parseHmToMin(timings.Maghrib);
+  const isha = parseHmToMin(timings.Isha);
+  if ([fajr, sunrise, dhuhr, asr, maghrib, isha].some(v => v === null)) return null;
+  if (!(fajr < sunrise && sunrise < dhuhr && dhuhr < asr && asr < maghrib && maghrib < isha)) return null;
+  return { fajr, sunrise, dhuhr, asr, maghrib, isha };
+}
+
+function computeScheduleForCity(cityCfg, y, m, d) {
+  const dstInfo = resolveDstInfo(cityCfg, y, m, d);
+  const dateIso = `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  const cacheKey = `${cityCfg.id}_${dateIso}`;
+  const sig = buildCitySignature(cityCfg);
+  const cached = appState.cachedSchedules[cacheKey];
+  const hasValidCached = cached && cached.paramsSignature === sig && cached.base;
+
+  const meth = METHODS[cityCfg.method] || METHODS.MWL;
+  const effFajrAngle = (cityCfg.customFajrAngle != null && cityCfg.customFajrAngle !== "") ? Number(cityCfg.customFajrAngle) : meth.fajr;
+  const effIshaMin = (cityCfg.customIshaMin != null && cityCfg.customIshaMin !== "") ? Number(cityCfg.customIshaMin) : meth.ishaMin;
+  const effIshaAngle = (cityCfg.customIshaAngle != null && cityCfg.customIshaAngle !== "") ? Number(cityCfg.customIshaAngle) : meth.isha;
+
+  let orig;
+  if (hasValidCached) {
+    orig = {
+      fajr: mod(cached.base.fajr + dstInfo.deltaMin, 1440),
+      sunrise: mod(cached.base.sunrise + dstInfo.deltaMin, 1440),
+      dhuhr: mod(cached.base.dhuhr + dstInfo.deltaMin, 1440),
+      asr: mod(cached.base.asr + dstInfo.deltaMin, 1440),
+      maghrib: mod(cached.base.maghrib + dstInfo.deltaMin, 1440),
+      isha: mod(cached.base.isha + dstInfo.deltaMin, 1440)
+    };
+  } else {
+    const tzH = dstInfo.effectiveHours;
+    const jd0 = julianDay(y, m, d);
+    const factor = cityCfg.madhab === "HANAFI" ? 2 : 1;
+    let t = { fajr: 5/24, sunrise: 6/24, dhuhr: 12/24, asr: 15/24, maghrib: 18/24, isha: 19.5/24 };
+    let h = { fajr: 5, sunrise: 6, dhuhr: 12, asr: 15, maghrib: 18, isha: 19.5 };
+    for (let pass = 0; pass < 2; pass++) {
+      const sD = sunPos(jd0 + t.dhuhr - tzH / 24);
+      h.dhuhr = 12 + tzH - cityCfg.lon / 15 - sD.eot;
+      h.sunrise = sunAngleTime(jd0 + t.sunrise - tzH / 24, cityCfg.lat, cityCfg.lon, tzH, 0.8333, false) ?? 6;
+      h.maghrib = sunAngleTime(jd0 + t.maghrib - tzH / 24, cityCfg.lat, cityCfg.lon, tzH, 0.8333, true) ?? 18;
+      const rawFajr = sunAngleTime(jd0 + t.fajr - tzH / 24, cityCfg.lat, cityCfg.lon, tzH, effFajrAngle, false);
+      const rawIsha = effIshaMin > 0
+        ? h.maghrib + effIshaMin / 60
+        : sunAngleTime(jd0 + t.isha - tzH / 24, cityCfg.lat, cityCfg.lon, tzH, effIshaAngle || 17, true);
+      h.asr = asrTime(jd0 + t.asr - tzH / 24, cityCfg.lat, cityCfg.lon, tzH, factor);
+
+      const night = mod(h.sunrise - h.maghrib, 24);
+      if (cityCfg.highLat === "NONE") {
+        h.fajr = rawFajr ?? (h.sunrise - 1.5);
+        h.isha = rawIsha ?? (h.maghrib + 1.5);
+      } else {
+        const fPort = cityCfg.highLat === "MIDDLE" ? night * 0.5 : (cityCfg.highLat === "SEVENTH" ? night / 7 : (effFajrAngle / 60) * night);
+        const iPort = cityCfg.highLat === "MIDDLE" ? night * 0.5 : (cityCfg.highLat === "SEVENTH" ? night / 7 : ((effIshaAngle || 17) / 60) * night);
+        h.fajr = (rawFajr == null || mod(h.sunrise - rawFajr, 24) > fPort) ? (h.sunrise - fPort) : rawFajr;
+        h.isha = effIshaMin > 0 ? rawIsha : ((rawIsha == null || mod(rawIsha - h.maghrib, 24) > iPort) ? (h.maghrib + iPort) : rawIsha);
+      }
+      t = { fajr: h.fajr/24, sunrise: h.sunrise/24, dhuhr: h.dhuhr/24, asr: h.asr/24, maghrib: h.maghrib/24, isha: h.isha/24 };
+    }
+    const toMin = (hr) => Math.round(mod(hr, 24) * 60);
+    orig = {
+      fajr: toMin(h.fajr),
+      sunrise: toMin(h.sunrise),
+      dhuhr: toMin(h.dhuhr) + (meth.dhuhrMin || 1),
+      asr: toMin(h.asr),
+      maghrib: toMin(h.maghrib),
+      isha: toMin(h.isha)
+    };
+  }
+
+  const useOffsets = !cityCfg.tempOnly || cityCfg.tempDate === dateIso;
+  const offs = useOffsets ? (cityCfg.offsets || {}) : {};
+  const adj = {};
+  Object.keys(orig).forEach(k => {
+    adj[k] = mod(orig[k] + (offs[k] || 0), 1440);
+  });
+  const jumuahBase = cityCfg.jumuahFollowDhuhr ? adj.dhuhr : (cityCfg.jumuahHour * 60 + cityCfg.jumuahMin);
+  orig.jumuah = cityCfg.jumuahFollowDhuhr ? orig.dhuhr : jumuahBase;
+  adj.jumuah = mod(jumuahBase + (cityCfg.jumuahFollowDhuhr ? (offs.jumuah || 0) : 0), 1440);
+
+  return {
+    dateIso,
+    dst: dstInfo.isDst,
+    orig,
+    adj,
+    offs,
+    sourceLabel: hasValidCached ? "مزامنة AlAdhan الموثوقة" : "حساب فلكي محلي",
+    syncedAtMillis: hasValidCached ? cached.syncedAtMillis : null
+  };
+}
+
+function toHijri(y, m, d, off) {
+  let yy = y, mm = m;
+  if (mm < 3) { yy -= 1; mm += 12; }
+  const a = Math.floor(yy / 100);
+  const b = 2 - a + Math.floor(a / 4);
+  const jd = Math.floor(365.25 * (yy + 4716)) + Math.floor(30.6001 * (mm + 1)) + d + b - 1524 + (off || 0);
+  let l = jd - 1948440 + 10632;
+  const n = Math.floor((l - 1) / 10631);
+  l = l - 10631 * n + 354;
+  const j = Math.floor((10985 - l) / 5316) * Math.floor((50 * l) / 17719) + Math.floor(l / 5670) * Math.floor((43 * l) / 15238);
+  l = l - Math.floor((30 - j) / 15) * Math.floor((17719 * j) / 50) - Math.floor(j / 16) * Math.floor((15238 * j) / 43) + 29;
+  const hm = Math.floor((24 * l) / 709);
+  const hd = l - Math.floor((709 * hm) / 24);
+  const hy = 30 * n + j - 30;
+  const months = ["محرم","صفر","ربيع الأول","ربيع الآخر","جمادى الأولى","جمادى الآخرة","رجب","شعبان","رمضان","شوال","ذو القعدة","ذو الحجة"];
+  return `${hd} ${months[hm - 1] || ""} ${hy} هـ`;
+}
+
+// ==================== 4. APP STATE, PERSISTENCE & AUDIO ====================
+let appState = {
+  settings: structuredClone(DEFAULT_SETTINGS),
+  cities: {},
+  adhkar: structuredClone(DEFAULT_ADHKAR),
+  cachedSchedules: {},
+  mediaUrls: {},
+  mediaNames: {},
+  stagedAudio: {}, // { slot: { file, url, name } }
+  selectedCountry: "",
+  openSections: { countries: true, iqama: false, offsets: false, adhan: false, adhkar: false, media: false, colors: false, display: false, backup: false },
+  showAdvancedColors: false,
+  citySearch: "",
+  sim: { active: false, elapsed: 0 },
+  manualAdhkarElapsed: null,
+  adhkarPaused: false,
+  dismissedKey: null,
+  lastAdhanKey: null,
+  lastAutoSyncAttempt: {}
+};
+
+let activeAudio = null;
+function playBuiltinChime(isFajr) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = isFajr ? [261.6, 293.6, 311.1, 392.0, 369.9, 293.6, 261.6] : [293.6, 311.1, 369.9, 392.0, 440.0, 392.0, 293.6];
+    let t = ctx.currentTime;
+    notes.forEach(f => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = f;
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.75);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(t); osc.stop(t + 0.8);
+      t += 0.65;
+    });
+  } catch (_) {}
+}
+
+function playAudioUrl(url, isFajrFallback) {
+  stopAdhanAudio();
+  if (url) {
+    activeAudio = new Audio(url);
+    activeAudio.play().catch(() => {
+      if (isFajrFallback !== null) playBuiltinChime(Boolean(isFajrFallback));
+    });
+  } else if (isFajrFallback !== null) {
+    playBuiltinChime(Boolean(isFajrFallback));
+  }
+}
+
+function playAdhanAudio(prayerKey) {
+  const slot = prayerKey === "fajr" ? "fajr_audio" : "default_audio";
+  playAudioUrl(appState.mediaUrls[slot], prayerKey === "fajr");
+}
+
+function stopAdhanAudio() {
+  if (activeAudio) { activeAudio.pause(); activeAudio = null; }
+}
+
+function normalizeCityCfg(preset) {
+  return {
+    id: preset.id, cAr: preset.cAr, cEn: preset.cEn, ar: preset.ar, en: preset.en,
+    lat: preset.lat, lon: preset.lon, tz: preset.tz, method: preset.method,
+    madhab: preset.madhab || "SHAFI", highLat: preset.highLat || "TWILIGHT",
+    dstMode: "AUTO", customFajrAngle: null, customIshaAngle: null, customIshaMin: null,
+    mosqueName: "", district: "", street: "",
+    offsets: { fajr: 0, sunrise: 0, dhuhr: 0, asr: 0, maghrib: 0, isha: 0, jumuah: 0 },
+    tempOnly: false, tempDate: null,
+    iqama: { fajr: 20, dhuhr: 15, asr: 15, maghrib: 10, isha: 15, jumuah: 15 },
+    jumuahFollowDhuhr: true, jumuahHour: 13, jumuahMin: 0
+  };
+}
+
+function normalizeArabicText(s) {
+  return (s || "").trim().toLowerCase()
+    .replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي")
+    .replace(/[\u064B-\u065F\u0670]/g, "");
+}
+
+async function initApp() {
+  let savedSettings = (await dbGet("settings", 1)) || lsGet("settings");
+  if (!savedSettings) {
+    savedSettings = structuredClone(DEFAULT_SETTINGS);
+    savedSettings.v4Migrated = true;
+    await dbPut("settings", savedSettings);
+    lsSet("settings", savedSettings);
+  } else {
+    savedSettings = {
+      ...structuredClone(DEFAULT_SETTINGS),
+      ...savedSettings,
+      colors: { ...DEFAULT_SETTINGS.colors, ...(savedSettings.colors || {}) }
+    };
+    if (!savedSettings.v4Migrated) {
+      if (savedSettings.colors?.screenBg === "#07120e" && savedSettings.colors?.clockText === "#c5a038") {
+        savedSettings.colors = structuredClone(DEFAULT_COLORS);
+      }
+      savedSettings.v4Migrated = true;
+      await dbPut("settings", savedSettings);
+      lsSet("settings", savedSettings);
+    }
+  }
+  appState.settings = savedSettings;
+  if (savedSettings.adhkarList) {
+    const isOldSeed = (savedSettings.adhkarList.length === 6 && !savedSettings.adhkarList.some(a => (a.text || "").includes("الْحَيُّ الْقَيُّومُ"))) ||
+      (savedSettings.adhkarList.length === 10 && !savedSettings.adhkarList.some(a => (a.text || "").includes("۝١")));
+    if (isOldSeed) {
+      appState.adhkar = structuredClone(DEFAULT_ADHKAR);
+      appState.settings.adhkarList = appState.adhkar;
+    } else {
+      appState.adhkar = savedSettings.adhkarList;
+    }
+  }
+
+  const existingCities = await dbGetAll("cities");
+  const lsCities = lsGet("cities", {});
+  Object.values(lsCities).forEach(c => { appState.cities[c.id] = c; });
+  existingCities.forEach(c => { appState.cities[c.id] = c; });
+  for (const p of BUILTIN_CITIES) {
+    if (!appState.cities[p.id]) {
+      const cfg = normalizeCityCfg(p);
+      appState.cities[p.id] = cfg;
+      await dbPut("cities", cfg);
+    }
+  }
+  lsSet("cities", appState.cities);
+
+  const savedCaches = await dbGetAll("cachedSchedules");
+  const lsCaches = lsGet("cachedSchedules", {});
+  Object.assign(appState.cachedSchedules, lsCaches);
+  savedCaches.forEach(cs => { appState.cachedSchedules[cs.cacheKey] = cs; });
+
+  const medias = await dbGetAll("media");
+  medias.forEach(m => {
+    if (m.blob) {
+      appState.mediaUrls[m.slot] = URL.createObjectURL(m.blob);
+      appState.mediaNames[m.slot] = m.name || "ملف محفوظ";
+    }
+  });
+
+  const activeCity = appState.cities[appState.settings.selectedCityId] || Object.values(appState.cities)[0];
+  appState.selectedCountry = activeCity?.cAr || "";
+
+  applyVisualSettings();
+  fetchWeatherIfOnline();
+  syncPrayerTimesOnline(false);
+  tick();
+  setInterval(tick, 1000);
+}
+
+function applyVisualSettings() {
+  const s = appState.settings;
+  const r = document.documentElement.style;
+  r.setProperty("--screen-bg", s.colors.screenBg);
+  r.setProperty("--header-bg", s.colors.headerBg);
+  r.setProperty("--header-text", s.colors.headerText);
+  r.setProperty("--box-border", s.colors.boxBorder);
+  r.setProperty("--clock-bg", s.colors.clockBg);
+  r.setProperty("--clock-text", s.colors.clockText);
+  r.setProperty("--clock-accent", s.colors.clockAccent);
+  r.setProperty("--date-text", s.colors.dateText);
+  r.setProperty("--next-bg", s.colors.nextBg);
+  r.setProperty("--next-text", s.colors.nextText);
+  r.setProperty("--prayer-bg", s.colors.prayerBg);
+  r.setProperty("--prayer-text", s.colors.prayerText);
+  r.setProperty("--accent", s.colors.accent);
+  r.setProperty("--sunrise-bg", s.colors.sunriseBg);
+  r.setProperty("--sunrise-text", s.colors.sunriseText);
+  r.setProperty("--jumuah-bg", s.colors.jumuahBg);
+  r.setProperty("--jumuah-text", s.colors.jumuahText);
+  r.setProperty("--ui-btn-bg", s.colors.uiButtonBg);
+  r.setProperty("--ui-btn-text", s.colors.uiButtonText);
+  r.setProperty("--bg-scrim-alpha", s.bgScrimAlpha ?? 0.25);
+  r.setProperty("--font-family", s.fontFamily);
+  r.setProperty("--clock-scale", s.clockScale);
+  r.setProperty("--countdown-scale", s.countdownScale);
+  r.setProperty("--text-scale", s.textScale);
+
+  const root = document.getElementById("appRoot");
+  root.style.backgroundImage = appState.mediaUrls.main_bg
+    ? `url("${appState.mediaUrls.main_bg}")`
+    : `radial-gradient(circle at 50% 25%, rgba(91, 27, 153, 0.28), rgba(9, 11, 18, 0.96))`;
+
+  const clockEl = document.getElementById("boxClock");
+  clockEl.style.backgroundImage = appState.mediaUrls.clock_bg ? `url("${appState.mediaUrls.clock_bg}")` : "none";
+  clockEl.classList.toggle("has-img", Boolean(appState.mediaUrls.clock_bg));
+
+  const sunriseHasFill = Boolean(s.colors.sunriseBg && s.colors.sunriseBg !== "transparent");
+  const jumuahHasFill = Boolean(s.colors.jumuahBg && s.colors.jumuahBg !== "transparent");
+  document.getElementById("boxSunrise").classList.toggle("has-fill", sunriseHasFill);
+  document.getElementById("boxSunrisePortrait")?.classList.toggle("has-fill", sunriseHasFill);
+  document.getElementById("boxJumuah").classList.toggle("has-fill", jumuahHasFill);
+  document.getElementById("boxJumuahPortrait")?.classList.toggle("has-fill", jumuahHasFill);
+
+  document.getElementById("overlayAdhan").style.backgroundImage = appState.mediaUrls.adhan_img ? `url("${appState.mediaUrls.adhan_img}")` : "none";
+  document.getElementById("overlayIqama").style.backgroundImage = appState.mediaUrls.iqama_bg ? `url("${appState.mediaUrls.iqama_bg}")` : "none";
+  document.getElementById("overlayAdhkar").style.backgroundImage = appState.mediaUrls.adhkar_bg ? `url("${appState.mediaUrls.adhkar_bg}")` : "none";
+
+  const phoneImg = document.getElementById("imgPhoneOffPreview");
+  const phoneSvg = document.getElementById("phoneOffSvg");
+  if (appState.mediaUrls.phone_off) {
+    phoneImg.src = appState.mediaUrls.phone_off;
+    phoneImg.style.display = "inline-block";
+    phoneSvg.style.display = "none";
+  } else {
+    phoneImg.style.display = "none";
+    phoneSvg.style.display = "block";
+  }
+
+  document.getElementById("dimLayer").style.opacity = s.dimEnabled ? s.dimAlpha : 0;
+  document.getElementById("boxSunrise").classList.toggle("hidden", !s.showSunrise);
+  document.getElementById("boxJumuah").classList.toggle("hidden", !s.showJumuah);
+  document.getElementById("boxSunrisePortrait")?.classList.toggle("hidden", !s.showSunrise);
+  document.getElementById("boxJumuahPortrait")?.classList.toggle("hidden", !s.showJumuah);
+  document.getElementById("portraitSideStrip")?.classList.toggle("hidden", !s.showSunrise && !s.showJumuah);
+  document.getElementById("boxNextPrayer").classList.toggle("hidden", !s.showNextPrayer);
+  document.getElementById("lblHijriDate").classList.toggle("hidden", !s.showHijri);
+  document.getElementById("lblGregDate").classList.toggle("hidden", !s.showGreg);
+}
+
+function toggleQuickMenu(e) {
+  e.stopPropagation();
+  document.getElementById("menuDropdown").classList.toggle("show");
+}
+function closeQuickMenu() {
+  document.getElementById("menuDropdown").classList.remove("show");
+}
+document.addEventListener("click", () => closeQuickMenu());
+
+function toHex6(c) {
+  if (!c || c === "transparent") return "#0e150f";
+  if (c.startsWith("#")) return c.slice(0, 7);
+  const m = c.match(/\d+/g);
+  if (!m || m.length < 3) return "#0e150f";
+  return "#" + [m[0], m[1], m[2]].map(n => Number(n).toString(16).padStart(2, "0")).join("");
+}
+
+function fmtMin(minOfDay, is24) {
+  const m = mod(minOfDay, 1440);
+  const h = Math.floor(m / 60), mm = m % 60;
+  if (is24) return `${String(h).padStart(2,"0")}:${String(mm).padStart(2,"0")}`;
+  const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+  return `${String(h12).padStart(2,"0")}:${String(mm).padStart(2,"0")} ${h < 12 ? "ص" : "م"}`;
+}
+
+function fmtHMS(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+
+function fmtMS(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  return `${String(Math.floor(sec / 60)).padStart(2,"0")}:${String(sec % 60).padStart(2,"0")}`;
+}
+
+function getCityNowParts(tz) {
+  const now = new Date();
+  let parts;
+  try {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, weekday: "short"
+    });
+    parts = Object.fromEntries(fmt.formatToParts(now).map(p => [p.type, p.value]));
+  } catch (_) {
+    parts = {
+      year: String(now.getFullYear()), month: String(now.getMonth() + 1).padStart(2, "0"),
+      day: String(now.getDate()).padStart(2, "0"), hour: String(now.getHours()).padStart(2, "0"),
+      minute: String(now.getMinutes()).padStart(2, "0"), second: String(now.getSeconds()).padStart(2, "0"),
+      weekday: "Mon"
+    };
+  }
+  const y = Number(parts.year), m = Number(parts.month), d = Number(parts.day);
+  let hr = Number(parts.hour); if (hr === 24) hr = 0;
+  const min = Number(parts.minute), sec = Number(parts.second);
+  const wdMap = { Sun:"الأحد", Mon:"الإثنين", Tue:"الثلاثاء", Wed:"الأربعاء", Thu:"الخميس", Fri:"الجمعة", Sat:"السبت" };
+  return { y, m, d, hr, min, sec, weekdayAr: wdMap[parts.weekday] || "" };
+}
+
+function tick() {
+  const s = appState.settings;
+  const city = appState.cities[s.selectedCityId] || Object.values(appState.cities)[0];
+  if (!city) return;
+
+  if (appState.sim.active) appState.sim.elapsed++;
+  if (appState.manualAdhkarElapsed !== null && !appState.adhkarPaused) {
+    appState.manualAdhkarElapsed++;
+    if (appState.manualAdhkarElapsed >= s.adhkarTotalSec) appState.manualAdhkarElapsed = null;
+  }
+
+  const nowP = getCityNowParts(city.tz);
+  const sched = computeScheduleForCity(city, nowP.y, nowP.m, nowP.d);
+  const tom = new Date(Date.UTC(nowP.y, nowP.m - 1, nowP.d + 1));
+  const tomSched = computeScheduleForCity(city, tom.getUTCFullYear(), tom.getUTCMonth() + 1, tom.getUTCDate());
+
+  const activeMosque = (city.mosqueName && city.mosqueName.trim()) ? city.mosqueName.trim() : s.mosqueName;
+  document.getElementById("lblMosqueName").textContent = activeMosque;
+  document.getElementById("lblCityName").textContent = city.ar;
+
+  const metaParts = [city.cAr, city.ar];
+  if (city.district && city.district.trim()) metaParts.push(city.district.trim());
+  if (city.street && city.street.trim()) metaParts.push(city.street.trim());
+  document.getElementById("lblCityMeta").textContent = metaParts.join(" — ");
+
+  const sunriseTxt = fmtMin(sched.adj.sunrise, s.is24Hour);
+  const jumuahTxt = fmtMin(sched.adj.jumuah, s.is24Hour);
+  document.getElementById("lblSunriseTime").textContent = sunriseTxt;
+  document.getElementById("lblJumuahTime").textContent = jumuahTxt;
+  const srPort = document.getElementById("lblSunriseTimePortrait");
+  const jmPort = document.getElementById("lblJumuahTimePortrait");
+  if (srPort) srPort.textContent = sunriseTxt;
+  if (jmPort) jmPort.textContent = jumuahTxt;
+
+  document.getElementById("lblWeekday").textContent = `${nowP.weekdayAr}،`;
+  document.getElementById("lblHijriDate").textContent = `${nowP.weekdayAr}، ${toHijri(nowP.y, nowP.m, nowP.d, s.hijriOffset)}`;
+
+  const gMonths = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  document.getElementById("lblGregDate").textContent = `${nowP.d} ${gMonths[nowP.m - 1]} ${nowP.y}`;
+
+  const hDisp = s.is24Hour ? nowP.hr : (nowP.hr === 0 ? 12 : (nowP.hr > 12 ? nowP.hr - 12 : nowP.hr));
+  document.getElementById("lblClockMain").textContent = `${String(hDisp).padStart(2,"0")}:${String(nowP.min).padStart(2,"0")}`;
+  document.getElementById("lblClockSec").textContent = ":" + String(nowP.sec).padStart(2,"0");
+  document.getElementById("lblClockPeriod").textContent = s.is24Hour ? "24H" : (nowP.hr < 12 ? "ص" : "م");
+
+  document.getElementById("statusDot").classList.toggle("offline", !navigator.onLine);
+  document.getElementById("lblOnlineStatus").textContent = navigator.onLine ? "متصل" : "أوفلاين";
+
+  const weatherEl = document.getElementById("lblWeatherStatus");
+  if (s.showWeather && s.cachedWeather && s.cachedWeather.cityId === city.id) {
+    weatherEl.textContent = `${Math.round(s.cachedWeather.temp)}°C`;
+  } else {
+    weatherEl.textContent = city.cAr;
+  }
+
+  // Evaluate Phase
+  const nowSec = nowP.hr * 3600 + nowP.min * 60 + nowP.sec;
+  const enabledAdhkar = appState.adhkar.filter(a => a.enabled);
+  let phase = { type: "NORMAL" };
+
+  if (appState.sim.active) {
+    const t = appState.sim.elapsed;
+    if (t <= 10) phase = { type: "ADHAN", key: "asr", ar: "العصر (تجربة)" };
+    else if (t <= 20) phase = { type: "IQAMA", ar: "العصر", rem: 20 - t };
+    else if (t <= 28) phase = { type: "PHONEOFF", ar: "العصر", rem: 28 - t };
+    else if (enabledAdhkar.length && t <= 48) phase = { type: "ADHKAR", elapsed: t - 28 };
+    else { appState.sim.active = false; stopAdhanAudio(); }
+  } else if (appState.manualAdhkarElapsed !== null && enabledAdhkar.length) {
+    phase = { type: "ADHKAR", elapsed: appState.manualAdhkarElapsed };
+  } else {
+    for (const p of PRAYERS) {
+      const adhanS = sched.adj[p.key] * 60;
+      const iqamaMin = city.iqama?.[p.key] ?? p.iqamaDef;
+      const iqamaDur = iqamaMin * 60;
+      const effAdhan = iqamaDur > 0 ? Math.min(s.adhanDisplaySec, Math.max(10, iqamaDur - 1)) : s.adhanDisplaySec;
+      const iqamaEnd = adhanS + Math.max(iqamaDur, effAdhan);
+      const phoneEnd = iqamaEnd + s.phoneOffSec;
+      const adhkarStart = phoneEnd + s.adhkarDelaySec;
+      const adhkarEnd = adhkarStart + s.adhkarTotalSec;
+      const prefix = `${sched.dateIso}_${p.key}`;
+
+      if (nowSec >= adhanS && nowSec < adhanS + effAdhan && appState.dismissedKey !== prefix + "_A") {
+        phase = { type: "ADHAN", key: p.key, ar: p.ar, k: prefix + "_A" }; break;
+      }
+      if (iqamaDur > 0 && nowSec >= adhanS + effAdhan && nowSec < iqamaEnd && appState.dismissedKey !== prefix + "_I") {
+        phase = { type: "IQAMA", ar: p.ar, rem: iqamaEnd - nowSec, k: prefix + "_I" }; break;
+      }
+      if (nowSec >= iqamaEnd && nowSec < phoneEnd && appState.dismissedKey !== prefix + "_P") {
+        phase = { type: "PHONEOFF", ar: p.ar, rem: phoneEnd - nowSec, k: prefix + "_P" }; break;
+      }
+      if (s.adhkarEnabled && enabledAdhkar.length && nowSec >= adhkarStart && nowSec < adhkarEnd && appState.dismissedKey !== prefix + "_Z") {
+        phase = { type: "ADHKAR", elapsed: nowSec - adhkarStart, k: prefix + "_Z" }; break;
+      }
+    }
+  }
+
+  // Next Prayer Countdown
+  let nextPrayer = PRAYERS[0], remSec = 0, nextPrayerMin = tomSched.adj.fajr;
+  const candidates = [
+    { key: "fajr", ar: "الفجر" }, { key: "sunrise", ar: "الشروق" },
+    { key: "dhuhr", ar: "الظهر" }, { key: "asr", ar: "العصر" },
+    { key: "maghrib", ar: "المغرب" }, { key: "isha", ar: "العشاء" }
+  ];
+  let found = false;
+  for (const c of candidates) {
+    if (sched.adj[c.key] * 60 > nowSec) {
+      nextPrayer = c; remSec = sched.adj[c.key] * 60 - nowSec; nextPrayerMin = sched.adj[c.key]; found = true; break;
+    }
+  }
+  if (!found) {
+    nextPrayer = candidates[0];
+    remSec = (86400 - nowSec) + tomSched.adj.fajr * 60;
+    nextPrayerMin = tomSched.adj.fajr;
+  }
+  document.getElementById("lblNextPrayerSummary").textContent = `${nextPrayer.ar} بعد ${fmtHMS(remSec)}`;
+  document.getElementById("lblNextPrayerTime").textContent = `(${fmtMin(nextPrayerMin, s.is24Hour)})`;
+
+  let syncText = sched.sourceLabel;
+  if (sched.syncedAtMillis) {
+    const dt = new Date(sched.syncedAtMillis);
+    syncText += ` • ${String(dt.getHours()).padStart(2,"0")}:${String(dt.getMinutes()).padStart(2,"0")}`;
+  }
+  document.getElementById("lblSyncBadge").textContent = syncText;
+
+  // Render Horizontal Prayer Cards
+  const row = document.getElementById("prayersRow");
+  row.innerHTML = PRAYERS.map(p => {
+    const isNext = nextPrayer.key === p.key;
+    const iq = city.iqama?.[p.key] ?? p.iqamaDef;
+    const off = sched.offs[p.key] || 0;
+    const offLabel = off === 0 ? "" : ` (${off > 0 ? "+" + off : off})`;
+    return `<div class="prayer-card ${isNext ? "active" : ""}" onclick="openQuickEdit('${p.key}')" title="اضغط للتعديل السريع">
+      <div class="p-name">${p.ar}${offLabel ? ` <small style="font-size:10px;opacity:0.85;">${offLabel}</small>` : ""}</div>
+      <div class="p-time">${fmtMin(sched.adj[p.key], s.is24Hour)}</div>
+      <div class="p-meta">+${iq} د</div>
+    </div>`;
+  }).join("");
+
+  // Toggle Overlays
+  document.getElementById("overlayAdhan").classList.toggle("show", phase.type === "ADHAN");
+  document.getElementById("overlayIqama").classList.toggle("show", phase.type === "IQAMA");
+  document.getElementById("overlayPhoneOff").classList.toggle("show", phase.type === "PHONEOFF");
+  document.getElementById("overlayAdhkar").classList.toggle("show", phase.type === "ADHKAR");
+
+  if (phase.type === "ADHAN") {
+    document.getElementById("adhanTopInfo").textContent = `${activeMosque} • ${document.getElementById("lblClockMain").textContent}`;
+    document.getElementById("adhanMessage").textContent = `حان الآن موعد أذان ${phase.ar}`;
+    const trig = appState.sim.active ? "SIM" : `${sched.dateIso}_${phase.key}`;
+    if (s.adhanAudioEnabled && appState.lastAdhanKey !== trig) {
+      appState.lastAdhanKey = trig;
+      playAdhanAudio(phase.key);
+    }
+  } else if (phase.type === "IQAMA") {
+    document.getElementById("iqamaTitle").textContent = `العد التنازلي لإقامة صلاة ${phase.ar}`;
+    document.getElementById("iqamaCountdown").textContent = fmtMS(phase.rem);
+  } else if (phase.type === "PHONEOFF") {
+    document.getElementById("phoneOffSub").textContent = `حان الآن وقت إقامة صلاة ${phase.ar} • سوّوا صفوفكم`;
+    document.getElementById("phoneOffSec").textContent = `${phase.rem} ثانية`;
+  } else if (phase.type === "ADHKAR" && enabledAdhkar.length) {
+    const idx = Math.floor(phase.elapsed / Math.max(3, s.adhkarItemSec)) % enabledAdhkar.length;
+    const item = enabledAdhkar[idx];
+    document.getElementById("adhkarText").textContent = item.text;
+    document.getElementById("adhkarMeta").textContent = item.meta;
+    document.getElementById("adhkarCounter").textContent = `${idx + 1} / ${enabledAdhkar.length}`;
+  }
+  appState.currentPhaseObj = phase;
+}
+
+async function syncPrayerTimesOnline(manual = false) {
+  const city = appState.cities[appState.settings.selectedCityId];
+  if (!city) return;
+  if (!navigator.onLine) {
+    if (manual) showToast("لا يوجد اتصال بالإنترنت — يتم الحساب فلكياً محلياً");
+    return;
+  }
+  const nowP = getCityNowParts(city.tz);
+  const tom = new Date(Date.UTC(nowP.y, nowP.m - 1, nowP.d + 1));
+  const dates = [
+    { y: nowP.y, m: nowP.m, d: nowP.d },
+    { y: tom.getUTCFullYear(), m: tom.getUTCMonth() + 1, d: tom.getUTCDate() }
+  ];
+  const sig = buildCitySignature(city);
+
+  let syncedAny = false;
+  for (const dt of dates) {
+    const dateIso = `${dt.y}-${String(dt.m).padStart(2,"0")}-${String(dt.d).padStart(2,"0")}`;
+    const cacheKey = `${city.id}_${dateIso}`;
+    const existing = appState.cachedSchedules[cacheKey];
+    if (!manual && existing && existing.paramsSignature === sig && (Date.now() - existing.syncedAtMillis < 12 * 3600 * 1000)) {
+      continue;
+    }
+    const meth = METHODS[city.method] || METHODS.MWL;
+    const hasCustomAngles = (city.customFajrAngle != null && city.customFajrAngle !== "") ||
+      (city.customIshaAngle != null && city.customIshaAngle !== "") ||
+      (city.customIshaMin != null && city.customIshaMin !== "");
+    const use99 = hasCustomAngles || city.method === "IGMG";
+    const apiMethod = use99 ? 99 : (meth.apiId ?? 3);
+    const school = city.madhab === "HANAFI" ? 1 : 0;
+    const highLatMap = { MIDDLE: 1, SEVENTH: 2, TWILIGHT: 3 };
+    const latAdj = highLatMap[city.highLat];
+    const ddMmYyyy = `${String(dt.d).padStart(2,"0")}-${String(dt.m).padStart(2,"0")}-${dt.y}`;
+
+    let url = `https://api.aladhan.com/v1/timings/${ddMmYyyy}?latitude=${city.lat}&longitude=${city.lon}&method=${apiMethod}&school=${school}&timezonestring=${encodeURIComponent(city.tz)}`;
+    if (latAdj) url += `&latitudeAdjustmentMethod=${latAdj}`;
+    if (use99) {
+      const fA = (city.customFajrAngle != null && city.customFajrAngle !== "") ? Number(city.customFajrAngle) : meth.fajr;
+      const iM = (city.customIshaMin != null && city.customIshaMin !== "") ? Number(city.customIshaMin) : meth.ishaMin;
+      const iA = (city.customIshaAngle != null && city.customIshaAngle !== "") ? Number(city.customIshaAngle) : meth.isha;
+      const ishaSpec = iM > 0 ? `${iM} min` : `${iA}`;
+      url += `&methodSettings=${encodeURIComponent(`${fA},null,${ishaSpec}`)}`;
+    }
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      const json = await resp.json();
+      const validated = validateAlAdhanTimings(json?.data?.timings);
+      if (validated) {
+        const entry = { cacheKey, cityId: city.id, dateIso, paramsSignature: sig, base: validated, syncedAtMillis: Date.now() };
+        appState.cachedSchedules[cacheKey] = entry;
+        await dbPut("cachedSchedules", entry);
+        syncedAny = true;
+      }
+    } catch (_) {}
+  }
+
+  lsSet("cachedSchedules", appState.cachedSchedules);
+  tick();
+  if (document.getElementById("settingsModal").classList.contains("show")) renderSettingsTab();
+  if (manual) {
+    showToast(syncedAny ? "✓ تم تحديث ومزامنة مواقيت الصلاة بنجاح" : "المواقيت محدثة أو تعذر الاتصال بالمزود");
+  }
+}
+
+function startSimulation() {
+  appState.lastAdhanKey = null;
+  appState.sim = { active: true, elapsed: 0 };
+  tick();
+}
+function toggleManualAdhkar() {
+  appState.manualAdhkarElapsed = appState.manualAdhkarElapsed === null ? 0 : null;
+  appState.adhkarPaused = false;
+  tick();
+}
+function toggleAdhkarPause() {
+  appState.adhkarPaused = !appState.adhkarPaused;
+  document.getElementById("btnAdhkarPause").textContent = appState.adhkarPaused ? "▶ استئناف" : "⏸ إيقاف مؤقت";
+}
+function nextAdhkarManual() {
+  if (appState.manualAdhkarElapsed !== null) appState.manualAdhkarElapsed += appState.settings.adhkarItemSec;
+  tick();
+}
+function dismissCurrentPhase() {
+  stopAdhanAudio();
+  if (appState.sim.active) {
+    if (appState.sim.elapsed <= 10) appState.sim.elapsed = 11;
+    else if (appState.sim.elapsed <= 20) appState.sim.elapsed = 21;
+    else if (appState.sim.elapsed <= 28) appState.sim.elapsed = 29;
+    else appState.sim.active = false;
+  } else if (appState.manualAdhkarElapsed !== null) {
+    appState.manualAdhkarElapsed = null;
+  } else if (appState.currentPhaseObj?.k) {
+    appState.dismissedKey = appState.currentPhaseObj.k;
+  }
+  tick();
+}
+function toggleFullscreen() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+  else document.exitFullscreen?.();
+}
+
+async function fetchWeatherIfOnline() {
+  if (!navigator.onLine) return;
+  const city = appState.cities[appState.settings.selectedCityId];
+  if (!city) return;
+  try {
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&current_weather=true`);
+    const j = await r.json();
+    if (j.current_weather) {
+      appState.settings.cachedWeather = { cityId: city.id, temp: j.current_weather.temperature, time: Date.now() };
+      await saveSettings(null);
+    }
+  } catch (_) {}
+}
+
+// ==================== 5. SETTINGS UI ====================
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(() => t.classList.remove("show"), 2600);
+}
+async function saveSettings(msg = "✓ تم الحفظ الدائم بنجاح") {
+  appState.settings.adhkarList = appState.adhkar;
+  await dbPut("settings", appState.settings);
+  lsSet("settings", appState.settings);
+  applyVisualSettings();
+  tick();
+  if (msg) showToast(msg);
+}
+async function saveCity(city, msg = "✓ تم حفظ إعدادات المدينة") {
+  appState.cities[city.id] = city;
+  await dbPut("cities", city);
+  lsSet("cities", appState.cities);
+  tick();
+  if (msg) showToast(msg);
+}
+
+const ALL_ACCORDION_KEYS = ["countries", "iqama", "offsets", "adhan", "adhkar", "media", "colors", "display", "backup"];
+
+function openSettings(tab = 0) {
+  const focusMap = { 0: "countries", 1: "iqama", 2: "adhan", 3: "media", 4: "colors" };
+  const targetKey = focusMap[tab] || "countries";
+  ALL_ACCORDION_KEYS.forEach(k => { appState.openSections[k] = (k === targetKey); });
+  document.getElementById("settingsModal").classList.add("show");
+  renderSettingsTab();
+}
+function closeSettings() {
+  document.getElementById("settingsModal").classList.remove("show");
+}
+function toggleAccordion(key) {
+  appState.openSections[key] = !appState.openSections[key];
+  renderSettingsTab();
+}
+function toggleAllAccordions() {
+  const allOpen = ALL_ACCORDION_KEYS.every(k => appState.openSections[k]);
+  ALL_ACCORDION_KEYS.forEach(k => { appState.openSections[k] = !allOpen; });
+  renderSettingsTab();
+}
+
+function renderAccordionSection(key, icon, title, subtitle, innerHtml) {
+  const isOpen = Boolean(appState.openSections[key]);
+  return `<div class="s-accordion ${isOpen ? "open" : ""}">
+    <button type="button" class="s-acc-head" onclick="toggleAccordion('${key}')">
+      <div class="s-acc-title-wrap">
+        <span class="s-acc-icon">${icon}</span>
+        <div>
+          <div class="s-acc-title">${title}</div>
+          ${subtitle ? `<div class="s-acc-sub">${subtitle}</div>` : ""}
+        </div>
+      </div>
+      <span class="s-acc-arrow" aria-label="فتح أو إغلاق القائمة">▾</span>
+    </button>
+    <div class="s-acc-body">${innerHtml}</div>
+  </div>`;
+}
+
+function renderSettingsTab() {
+  const s = appState.settings;
+  const city = appState.cities[s.selectedCityId] || Object.values(appState.cities)[0];
+  if (!city) return;
+  document.getElementById("settingsActiveCity").textContent =
+    `${city.cAr} — ${city.ar} • ${city.tz} (${Number(city.lat).toFixed(2)}, ${Number(city.lon).toFixed(2)})`;
+  const allOpen = ALL_ACCORDION_KEYS.every(k => appState.openSections[k]);
+  const toggleBtn = document.getElementById("btnToggleAllAccordions");
+  if (toggleBtn) toggleBtn.textContent = allOpen ? "طي الكل" : "فتح الكل";
+
+  const body = document.getElementById("settingsBody");
+  const allCities = Object.values(appState.cities);
+  const countries = [...new Set(allCities.map(c => `${c.cAr}|||${c.cEn}`))].map(p => {
+    const [cAr, cEn] = p.split("|||");
+    return { cAr, cEn };
+  }).sort((a, b) => a.cAr.localeCompare(b.cAr, "ar"));
+  if (!appState.selectedCountry) appState.selectedCountry = city.cAr;
+
+  const countryCities = allCities.filter(c => c.cAr === appState.selectedCountry);
+  const nq = normalizeArabicText(appState.citySearch);
+  const searchedCities = nq ? allCities.filter(c =>
+    normalizeArabicText(c.ar).includes(nq) ||
+    normalizeArabicText(c.cAr).includes(nq) ||
+    c.en.toLowerCase().includes(nq) ||
+    c.cEn.toLowerCase().includes(nq)
+  ) : [];
+
+  const nowP = getCityNowParts(city.tz);
+  const sched = computeScheduleForCity(city, nowP.y, nowP.m, nowP.d);
+  const syncTimeStr = sched.syncedAtMillis
+    ? `آخر مزامنة: ${new Date(sched.syncedAtMillis).toLocaleTimeString("ar-EG")}`
+    : "الحساب الفلكي المحلي / مزامنة تلقائية";
+
+  // 1. Countries & Cities (Interactive Country Dropdown + City Dropdown)
+  const secCountriesHtml = `
+    <div class="s-row">
+      <span><strong>1. الدولة (${countries.length} دولة)</strong></span>
+      <select style="flex:1;max-width:420px;" onchange="onSelectCountryDropdown(this.value)">
+        ${countries.map(cn => `<option value="${cn.cAr}" ${appState.selectedCountry===cn.cAr?"selected":""}>${cn.cAr} — ${cn.cEn}</option>`).join("")}
+      </select>
+    </div>
+    <div class="s-row">
+      <span><strong>2. المدينة (${countryCities.length} مدينة)</strong></span>
+      <select style="flex:1;max-width:420px;" onchange="selectCity(this.value)">
+        ${countryCities.map(c => `<option value="${c.id}" ${c.id===city.id?"selected":""}>${c.ar} (${c.en}) — ${c.tz}</option>`).join("")}
+      </select>
+    </div>
+    <input type="text" placeholder="بحث سريع عن أي دولة أو مدينة (كاسل، برلين، عمان، الرياض)..." value="${appState.citySearch}" oninput="appState.citySearch=this.value;renderSettingsTab()" />
+    ${nq ? `<div class="city-list">
+      ${searchedCities.slice(0, 20).map(c => `<div class="city-item ${c.id === city.id ? "selected" : ""}" onclick="selectCity('${c.id}');appState.citySearch='';">
+        <div><strong>${c.ar} — ${c.cAr}</strong><div style="font-size:12px;color:#b0c4c7;">${c.en}, ${c.cEn} • ${c.tz}</div></div>
+        <span>${c.id === city.id ? "✓ نشطة" : "اختيار"}</span>
+      </div>`).join("")}
+    </div>` : ""}
+    <div class="s-row">
+      <div><strong>${sched.sourceLabel}</strong><div style="font-size:12px;color:#b2dfdb;">${syncTimeStr}</div></div>
+      <button class="btn-primary" onclick="syncPrayerTimesOnline(true)">🔄 تحديث ومزامنة الآن</button>
+    </div>
+    <div class="s-sub-title">بيانات المسجد والموقع الخاصة بمدينة ${city.ar}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">
+      <input id="cMosqueName" type="text" placeholder="اسم المسجد لهذه المدينة (اختياري)" value="${city.mosqueName || ""}" oninput="updateCityFieldSilent('mosqueName', this.value)" />
+      <input id="cDistrict" type="text" placeholder="الحي / المنطقة" value="${city.district || ""}" oninput="updateCityFieldSilent('district', this.value)" />
+      <input id="cStreet" type="text" placeholder="الشارع / العنوان" value="${city.street || ""}" oninput="updateCityFieldSilent('street', this.value)" />
+    </div>
+    <button class="btn-secondary" onclick="saveCity(appState.cities['${city.id}'], '✓ تم حفظ بيانات المسجد للمدينة')">حفظ بيانات المدينة</button>
+    <div class="s-sub-title">الحساب الفلكي والتوقيت الصيفي لـ ${city.ar}</div>
+    <div class="s-row"><span>طريقة الحساب</span>
+      <select onchange="updateCityAndSync('method', this.value)">
+        ${Object.entries(METHODS).map(([k,v]) => `<option value="${k}" ${city.method===k?"selected":""}>${v.name}</option>`).join("")}
+      </select>
+    </div>
+    <div class="s-row"><span>مذهب صلاة العصر</span>
+      <select onchange="updateCityAndSync('madhab', this.value)">
+        <option value="SHAFI" ${city.madhab==="SHAFI"?"selected":""}>الشافعي / الجمهور</option>
+        <option value="HANAFI" ${city.madhab==="HANAFI"?"selected":""}>الحنفي</option>
+      </select>
+    </div>
+    <div class="s-row"><span>التوقيت الصيفي / الشتوي</span>
+      <select onchange="updateCityAndSync('dstMode', this.value)">
+        <option value="AUTO" ${(city.dstMode||"AUTO")==="AUTO"?"selected":""}>تلقائي حسب الدولة</option>
+        <option value="FORCE_SUMMER" ${city.dstMode==="FORCE_SUMMER"?"selected":""}>فرض الصيفي (+1 ساعة)</option>
+        <option value="FORCE_WINTER" ${city.dstMode==="FORCE_WINTER"?"selected":""}>فرض الشتوي / القياسي</option>
+      </select>
+    </div>
+    <div class="s-row"><span>خطوط العرض العليا</span>
+      <select onchange="updateCityAndSync('highLat', this.value)">
+        <option value="TWILIGHT" ${city.highLat==="TWILIGHT"?"selected":""}>الزاوية النسبية (أوروبا)</option>
+        <option value="SEVENTH" ${city.highLat==="SEVENTH"?"selected":""}>سُبع الليل</option>
+        <option value="MIDDLE" ${city.highLat==="MIDDLE"?"selected":""}>منتصف الليل</option>
+        <option value="NONE" ${city.highLat==="NONE"?"selected":""}>بدون تعديل</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;">
+      <input type="number" step="0.1" placeholder="زاوية الفجر" value="${city.customFajrAngle ?? ""}" onchange="updateCityNumAndSync('customFajrAngle', this.value)" />
+      <input type="number" step="0.1" placeholder="زاوية العشاء" value="${city.customIshaAngle ?? ""}" onchange="updateCityNumAndSync('customIshaAngle', this.value)" />
+      <input type="number" step="1" placeholder="دقائق العشاء بعد المغرب" value="${city.customIshaMin ?? ""}" onchange="updateCityNumAndSync('customIshaMin', this.value)" />
+    </div>
+    <div class="s-row"><span>تعديل التاريخ الهجري (${s.hijriOffset} يوم)</span>
+      <div><button class="btn-secondary" onclick="sHijri(-1)">-</button> <button class="btn-secondary" onclick="sHijri(1)">+</button></div>
+    </div>
+    <div class="s-sub-title">إضافة مدينة أخرى (إحداثيات)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <input id="ncCountry" type="text" placeholder="الدولة بالعربية" />
+      <input id="ncCity" type="text" placeholder="المدينة بالعربية" />
+      <input id="ncLat" type="number" step="0.0001" placeholder="خط العرض (31.9454)" />
+      <input id="ncLon" type="number" step="0.0001" placeholder="خط الطول (35.9284)" />
+      <input id="ncTz" type="text" placeholder="المنطقة الزمنية (Europe/Berlin)" value="Europe/Berlin" />
+      <button class="btn-primary" onclick="addCustomCity()">+ إضافة وتفعيل</button>
+    </div>`;
+
+  // 2. Iqama & Jumuah
+  const secIqamaHtml = `
+    ${[...PRAYERS, {key:"jumuah", ar:"الجمعة", iqamaDef:15}].map(p => {
+      const iq = city.iqama?.[p.key] ?? p.iqamaDef;
+      return `<div class="s-row"><span>إقامة صلاة ${p.ar}: <strong>${iq} دقيقة</strong></span>
+        <div><button class="btn-secondary" onclick="setIqama('${p.key}',${iq-1})">-</button> <button class="btn-secondary" onclick="setIqama('${p.key}',${iq+1})">+</button></div>
+      </div>`;
+    }).join("")}
+    <div class="s-sub-title">إعدادات صلاة الجمعة</div>
+    <div class="s-row">
+      <span>اتّباع صلاة الجمعة للظهر: ${city.jumuahFollowDhuhr ? "مفعل" : `مخصص (${String(city.jumuahHour).padStart(2,"0")}:${String(city.jumuahMin).padStart(2,"0")})`}</span>
+      <button class="btn-secondary" onclick="toggleJumuahFollow()">تبديل</button>
+    </div>
+    ${!city.jumuahFollowDhuhr ? `<div class="s-row"><span>وقت الجمعة المخصص</span><div><input type="number" min="10" max="15" value="${city.jumuahHour}" onchange="setJumuahHM(this.value, null)" style="width:70px"/> : <input type="number" min="0" max="59" value="${city.jumuahMin}" onchange="setJumuahHM(null, this.value)" style="width:70px"/></div></div>` : ""}`;
+
+  // 3. Prayer Times & Manual Offsets
+  const allP = [{k:"fajr",n:"الفجر"},{k:"sunrise",n:"الشروق"},{k:"dhuhr",n:"الظهر"},{k:"asr",n:"العصر"},{k:"maghrib",n:"المغرب"},{k:"isha",n:"العشاء"},{k:"jumuah",n:"الجمعة"}];
+  const secOffsetsHtml = `
+    <div class="s-row">
+      <span>${city.tempOnly ? "تعديل مؤقت لليوم فقط" : "تعديل دائم للأيام الجديدة"}</span>
+      <button class="btn-secondary" onclick="toggleTempMode()">${city.tempOnly ? "تبديل لدائم" : "تبديل لمؤقت لليوم"}</button>
+    </div>
+    <button class="btn-danger" onclick="resetAllOffsets()">إعادة جميع مواقيت ${city.ar} للأصل</button>
+    ${allP.map(p => {
+      const off = sched.offs[p.k] || 0;
+      return `<div class="s-row">
+        <div><strong>${p.n}</strong><div style="font-size:12px;color:#b2dfdb;">الأصلي: ${fmtMin(sched.orig[p.k], s.is24Hour)} ← المعدل: ${fmtMin(sched.adj[p.k], s.is24Hour)} (${off > 0 ? "+"+off : off} د)</div></div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-secondary" onclick="adjOffset('${p.k}',-5)">-5</button>
+          <button class="btn-secondary" onclick="adjOffset('${p.k}',-1)">-1</button>
+          <button class="btn-secondary" onclick="adjOffset('${p.k}',1)">+1</button>
+          <button class="btn-secondary" onclick="adjOffset('${p.k}',5)">+5</button>
+          ${off !== 0 ? `<button class="btn-danger" onclick="resetOneOffset('${p.k}')">إلغاء</button>` : ""}
+        </div>
+      </div>`;
+    }).join("")}`;
+
+  // 4. Adhan & Phone Off
+  const secAdhanHtml = `
+    <div class="s-row"><span>تشغيل صوت الأذان تلقائياً</span><input type="checkbox" ${s.adhanAudioEnabled?"checked":""} onchange="appState.settings.adhanAudioEnabled=this.checked;saveSettings()"/></div>
+    <div class="s-row"><span>مدة عرض صورة الأذان (ثانية)</span><input type="number" value="${s.adhanDisplaySec}" onchange="appState.settings.adhanDisplaySec=Math.max(10,+this.value);saveSettings()"/></div>
+    <div class="s-row"><span>مدة عرض صورة إغلاق الهاتف (ثانية)</span><input type="number" value="${s.phoneOffSec}" onchange="appState.settings.phoneOffSec=Math.max(5,+this.value);saveSettings()"/></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-secondary" onclick="playAdhanAudio('fajr')">▶ تجربة أذان الفجر</button>
+      <button class="btn-secondary" onclick="playAdhanAudio('dhuhr')">▶ تجربة باقي الصلوات</button>
+      <button class="btn-danger" onclick="stopAdhanAudio()">⏹ إيقاف</button>
+      <button class="btn-primary" onclick="closeSettings();startSimulation()">اختبار الدورة الكاملة الآن</button>
+    </div>`;
+
+  // 5. Post-Prayer Adhkar
+  const secAdhkarHtml = `
+    <div class="s-row"><span>تفعيل الأذكار بعد الصلاة</span><input type="checkbox" ${s.adhkarEnabled?"checked":""} onchange="appState.settings.adhkarEnabled=this.checked;saveSettings()"/></div>
+    <div class="s-row"><span>بداية العرض بعد الإقامة (ثانية)</span><input type="number" value="${s.adhkarDelaySec}" onchange="appState.settings.adhkarDelaySec=Math.max(0,+this.value);saveSettings()"/></div>
+    <div class="s-row"><span>إجمالي مدة العرض (ثانية)</span><input type="number" value="${s.adhkarTotalSec}" onchange="appState.settings.adhkarTotalSec=Math.max(20,+this.value);saveSettings()"/></div>
+    <div class="s-row"><span>مدة كل ذكر (ثانية)</span><input type="number" value="${s.adhkarItemSec}" onchange="appState.settings.adhkarItemSec=Math.max(3,+this.value);saveSettings()"/></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-secondary" onclick="closeSettings();toggleManualAdhkar()">▶ تشغيل عرض الأذكار الآن</button>
+      <button class="btn-secondary" onclick="reloadFullAdhkar()">📖 تحديث الأذكار الكاملة (13 ذكراً)</button>
+    </div>
+    ${appState.adhkar.map((z,i) => `<div class="s-row">
+      <div style="flex:1;font-size:13px;white-space:pre-line;">${z.text} <br><small style="color:#dfb743">${z.meta}</small></div>
+      <input type="checkbox" ${z.enabled?"checked":""} onchange="appState.adhkar[${i}].enabled=this.checked;saveSettings()"/>
+    </div>`).join("")}`;
+
+  // 6. Media & Audio
+  const imgSlots = [
+    { slot: "main_bg", label: "خلفية الشاشة الرئيسية" },
+    { slot: "clock_bg", label: "خلفية صندوق الساعة" },
+    { slot: "adhan_img", label: "خلفية شاشة الأذان" },
+    { slot: "iqama_bg", label: "خلفية العد التنازلي للإقامة" },
+    { slot: "phone_off", label: "صورة انتهاء الإقامة (إغلاق الهاتف)" },
+    { slot: "adhkar_bg", label: "خلفية أذكار ما بعد الصلاة" }
+  ];
+  const audioSlots = [
+    { slot: "fajr_audio", label: "صوت أذان الفجر", isFajr: true },
+    { slot: "default_audio", label: "صوت أذان بقية الصلوات", isFajr: false }
+  ];
+  const secMediaHtml = `
+    <div class="s-row">
+      <span>درجة تغميق الخلفية لوضوح الأرقام (${Math.round((s.bgScrimAlpha ?? 0.25) * 100)}%)</span>
+      <input type="range" min="0" max="0.85" step="0.05" value="${s.bgScrimAlpha ?? 0.25}" oninput="appState.settings.bgScrimAlpha=+this.value;saveSettings(null)" />
+    </div>
+    ${imgSlots.map(sl => `<div class="s-row">
+      <div><strong>${sl.label}</strong><div style="font-size:12px;color:#80cbc4;">${appState.mediaUrls[sl.slot] ? `✓ محفوظ (${appState.mediaNames[sl.slot] || "صورة مخصصة"})` : "الافتراضي المدمج"}</div></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="file" accept="image/*" onchange="uploadMediaFile('${sl.slot}', this.files[0])" />
+        ${appState.mediaUrls[sl.slot] ? `<button class="btn-danger" onclick="clearMediaFile('${sl.slot}')">حذف الصورة</button>` : ""}
+      </div>
+    </div>`).join("")}
+    <div class="s-sub-title">أصوات الأذان (استماع قبل الاعتماد)</div>
+    ${audioSlots.map(sl => {
+      const staged = appState.stagedAudio[sl.slot];
+      const savedName = appState.mediaNames[sl.slot];
+      return `<div class="s-row" style="flex-direction:column;align-items:stretch;gap:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div><strong>${sl.label}</strong><div style="font-size:12px;color:#80cbc4;">${appState.mediaUrls[sl.slot] ? `✓ صوت مخصص معتمد (${savedName || "ملف صوتي"})` : "نغمة الأذان المدمجة الافتراضية"}</div></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn-secondary" onclick="playAdhanAudio('${sl.isFajr ? "fajr" : "dhuhr"}')">▶ تجربة الصوت الحالي</button>
+            <button class="btn-danger" onclick="stopAdhanAudio()">⏹ إيقاف</button>
+            ${appState.mediaUrls[sl.slot] ? `<button class="btn-danger" onclick="clearMediaFile('${sl.slot}')">حذف</button>` : ""}
+          </div>
+        </div>
+        <input type="file" accept="audio/*" onchange="stageAudioFile('${sl.slot}', this.files[0])" />
+        ${staged ? `<div style="background:#0e221b;border:1px solid #dfb743;border-radius:10px;padding:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
+          <span style="font-size:13px;color:#dfb743;">ملف جاهز للمعاينة: <strong>${staged.name}</strong></span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn-secondary" onclick="playStagedAudio('${sl.slot}')">▶ استماع قبل الاعتماد</button>
+            <button class="btn-primary" onclick="commitStagedAudio('${sl.slot}')">✓ حفظ واعتماد الصوت</button>
+            <button class="btn-danger" onclick="cancelStagedAudio('${sl.slot}')">إلغاء</button>
+          </div>
+        </div>` : ""}
+      </div>`;
+    }).join("")}`;
+
+  // 7. Colors & Unified Theme
+  const colorFields = [
+    ["screenBg","1. خلفية التطبيق الرئيسية"],["headerText","2. لون خط اسم المسجد"],["headerBg","3. خلفية الشريط العلوي"],
+    ["boxBorder","4. لون إطارات الصناديق والحدود"],["clockBg","5. خلفية صندوق الساعة"],["clockText","6. لون أرقام الساعة"],
+    ["clockAccent","7. لون الثواني و ص/م"],["dateText","8. لون التاريخ الهجري والميلادي"],
+    ["nextBg","9. خلفية صندوق الصلاة القادمة"],["nextText","10. لون نص الصلاة القادمة والعد التنازلي"],
+    ["prayerBg","11. خلفيات عدادات الصلوات"],["prayerText","12. لون أسماء وأرقام الصلوات"],["accent","13. لون تمييز الصلاة القادمة النشطة"],
+    ["sunriseBg","14. خلفية صندوق الشروق"],["sunriseText","15. لون نص صندوق الشروق"],
+    ["jumuahBg","16. خلفية صندوق الجمعة"],["jumuahText","17. لون نص صندوق الجمعة"],
+    ["uiButtonBg","18. خلفية القوائم والأزرار العلوية"],["uiButtonText","19. لون نصوص وأيقونات الأزرار"]
+  ];
+  const secColorsHtml = `
+    <div style="background:#0e221b;border:1px solid #dfb743;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;">
+      <strong style="color:#dfb743;font-size:15px;">التحكم الموحّد السريع (تغيير شامل بضغطة واحدة):</strong>
+      <div class="s-row">
+        <span><strong>1. تغيير جميع الخطوط والنصوص بلون واحد</strong></span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="inpAllFontsColor" type="color" value="${toHex6(s.colors.clockText)}" onchange="applyAllFontColor(this.value)"/>
+          <button class="btn-secondary" onclick="applyAllFontColor('#ffffff')">أبيض</button>
+          <button class="btn-secondary" onclick="applyAllFontColor('#c5a038')">ذهبي</button>
+        </div>
+      </div>
+      <div class="s-row">
+        <span><strong>2. تغيير خلفيات جميع الصناديق بلون واحد</strong></span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input id="inpAllBoxesBg" type="color" value="${toHex6(s.colors.prayerBg)}" onchange="applyAllBoxesBgHex(this.value)"/>
+          <button class="btn-secondary" onclick="applyAllBoxesBgColor('rgba(91, 27, 153, 0.82)')">بنفسجي شفاف</button>
+          <button class="btn-secondary" onclick="applyAllBoxesBgColor('rgba(18, 22, 31, 0.78)')">أسود زجاجي</button>
+          <button class="btn-secondary" onclick="applyAllBoxesBgColor('transparent')">شفاف كامل</button>
+        </div>
+      </div>
+    </div>
+    <div class="theme-presets-grid">
+      ${WEB_THEMES.map(t => {
+        const active = s.colors.screenBg === t.colors.screenBg && s.colors.clockText === t.colors.clockText && s.colors.boxBorder === t.colors.boxBorder;
+        return `<button class="theme-chip ${active ? "selected" : ""}" style="background:${t.colors.clockBg};color:${t.colors.clockText};border-color:${t.colors.boxBorder};" onclick="applyWebTheme('${t.id}')">
+          <span class="swatch-dot" style="background:${t.colors.screenBg}"></span>
+          <span class="swatch-dot" style="background:${t.colors.accent}"></span>
+          <span>${t.name}</span>
+        </button>`;
+      }).join("")}
+    </div>
+    <button class="btn-secondary" onclick="appState.showAdvancedColors=!appState.showAdvancedColors;renderSettingsTab()">${appState.showAdvancedColors ? "▲ إخفاء الألوان التفصيلية (19 عنصراً)" : "▼ فتح الألوان التفصيلية لجميع الأقسام (19 عنصراً)"}</button>
+    ${appState.showAdvancedColors ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;">
+      ${colorFields.map(([k,lbl]) => `<div class="s-row"><span>${lbl}</span><input type="color" value="${toHex6(s.colors[k])}" onchange="appState.settings.colors['${k}']=this.value;saveSettings()"/></div>`).join("")}
+    </div>` : ""}`;
+
+  // 8. Display & Clock
+  const secDisplayHtml = `
+    <div class="s-row"><span>اسم المسجد الافتراضي العام</span><input id="inpMosque" type="text" value="${s.mosqueName}" style="flex:1"/><button class="btn-primary" onclick="appState.settings.mosqueName=document.getElementById('inpMosque').value||'مسجد النور';saveSettings()">حفظ</button></div>
+    <div class="s-row"><span>نظام 24 ساعة</span><input type="checkbox" ${s.is24Hour?"checked":""} onchange="appState.settings.is24Hour=this.checked;saveSettings()"/></div>
+    <div class="s-row"><span>إظهار الشروق</span><input type="checkbox" ${s.showSunrise?"checked":""} onchange="appState.settings.showSunrise=this.checked;saveSettings()"/></div>
+    <div class="s-row"><span>إظهار الجمعة</span><input type="checkbox" ${s.showJumuah?"checked":""} onchange="appState.settings.showJumuah=this.checked;saveSettings()"/></div>
+    <div class="s-row"><span>إظهار التاريخ الهجري</span><input type="checkbox" ${s.showHijri?"checked":""} onchange="appState.settings.showHijri=this.checked;saveSettings()"/></div>
+    <div class="s-row"><span>إظهار التاريخ الميلادي</span><input type="checkbox" ${s.showGreg?"checked":""} onchange="appState.settings.showGreg=this.checked;saveSettings()"/></div>
+    <div class="s-row"><span>إظهار عداد الصلاة القادمة</span><input type="checkbox" ${s.showNextPrayer?"checked":""} onchange="appState.settings.showNextPrayer=this.checked;saveSettings()"/></div>
+    <div class="s-row"><span>التعتيم الليلي</span><input type="checkbox" ${s.dimEnabled?"checked":""} onchange="appState.settings.dimEnabled=this.checked;saveSettings()"/></div>
+    <div class="s-row"><span>حجم الساعة (${Math.round(s.clockScale*100)}%)</span><input type="range" min="0.7" max="1.45" step="0.05" value="${s.clockScale}" oninput="appState.settings.clockScale=+this.value;saveSettings(null)"/></div>
+    <div class="s-row"><span>حجم العد التنازلي (${Math.round(s.countdownScale*100)}%)</span><input type="range" min="0.7" max="1.45" step="0.05" value="${s.countdownScale}" oninput="appState.settings.countdownScale=+this.value;saveSettings(null)"/></div>
+    <div class="s-row"><span>حجم النصوص (${Math.round(s.textScale*100)}%)</span><input type="range" min="0.8" max="1.35" step="0.05" value="${s.textScale}" oninput="appState.settings.textScale=+this.value;saveSettings(null)"/></div>`;
+
+  // 9. Backup & Reset
+  const secBackupHtml = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn-primary" onclick="exportBackupJson()">📥 تصدير نسخة احتياطية JSON</button>
+      <label class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;">
+        📤 استيراد نسخة احتياطية
+        <input type="file" accept=".json,application/json" style="display:none;" onchange="importBackupJson(this.files[0])" />
+      </label>
+      <button class="btn-danger" onclick="confirmResetDefaults()">↺ استعادة الإعدادات الافتراضية (بموافقتي)</button>
+    </div>`;
+
+  body.innerHTML = [
+    renderAccordionSection("countries", "🌍", "الدول والمدن والمزامنة", `${city.cAr} • ${city.ar} (${countries.length} دولة)`, secCountriesHtml),
+    renderAccordionSection("iqama", "⏱", "إقامة الصلاة وصلاة الجمعة", `الفجر +${city.iqama?.fajr ?? 20} د • الظهر +${city.iqama?.dhuhr ?? 15} د`, secIqamaHtml),
+    renderAccordionSection("offsets", "🕌", "مواقيت الصلوات والتعديلات اليدوية", city.temporaryOffsetsOnly ? "تعديل مؤقت لليوم فقط" : "تعديل دائم للأيام القادمة", secOffsetsHtml),
+    renderAccordionSection("adhan", "🔔", "الأذان وإغلاق الهاتف والمحاكاة", s.adhanAudioEnabled ? "صوت الأذان مفعّل" : "صوت الأذان مكتوم", secAdhanHtml),
+    renderAccordionSection("adhkar", "📖", "أذكار ما بعد الصلاة", `${appState.adhkar.filter(a=>a.enabled).length} ذكر مفعّل من ${appState.adhkar.length}`, secAdhkarHtml),
+    renderAccordionSection("media", "🖼", "الصور والخلفيات والأصوات", "رفع صور الخلفيات وتجربة أصوات الأذان", secMediaHtml),
+    renderAccordionSection("colors", "🎨", "الألوان والخطوط وخلفيات الصناديق", "توحيد ألوان الخطوط والصناديق أو التخصيص المستقل", secColorsHtml),
+    renderAccordionSection("display", "🖥", "الشاشة والساعة والعناصر والطقس", `${s.mosqueName} • ${s.is24Hour ? "24 ساعة" : "12 ساعة"}`, secDisplayHtml),
+    renderAccordionSection("backup", "💾", "النسخ الاحتياطي واستعادة الافتراضي", "تصدير واستيراد الإعدادات بصيغة JSON", secBackupHtml)
+  ].join("");
+}
+
+function onSelectCountryDropdown(countryAr) {
+  appState.selectedCountry = countryAr;
+  const firstCity = Object.values(appState.cities).find(c => c.cAr === countryAr);
+  if (firstCity && appState.settings.selectedCityId !== firstCity.id) {
+    selectCity(firstCity.id);
+  } else {
+    renderSettingsTab();
+  }
+}
+
+const WEB_THEMES = [
+  {
+    id: "mawaqit_purple", name: "البنفسجي العصري (مواقيت)",
+    colors: structuredClone(DEFAULT_COLORS)
+  },
+  {
+    id: "almoazin_gold", name: "ذهبي ملكي (المؤذن)",
+    colors: {
+      screenBg: "#07120e", headerBg: "transparent", headerText: "#c5a038", boxBorder: "#8e7428",
+      clockBg: "rgba(14, 21, 15, 0.90)", clockText: "#c5a038", clockAccent: "#dfb743", dateText: "#c5a038",
+      nextBg: "rgba(18, 24, 20, 0.82)", nextText: "#c5a038",
+      prayerBg: "rgba(14, 21, 15, 0.90)", prayerText: "#c5a038", accent: "#d4af37",
+      sunriseBg: "rgba(14, 21, 15, 0.90)", sunriseText: "#c5a038", jumuahBg: "rgba(14, 21, 15, 0.90)", jumuahText: "#c5a038",
+      uiButtonBg: "rgba(21, 41, 46, 0.92)", uiButtonText: "#c5a038"
+    }
+  },
+  {
+    id: "midnight_navy", name: "أزرق نيلي",
+    colors: {
+      screenBg: "#071324", headerBg: "transparent", headerText: "#e3f2fd", boxBorder: "#2563eb",
+      clockBg: "rgba(13, 31, 60, 0.90)", clockText: "#90caf9", clockAccent: "#ffe082", dateText: "#e3f2fd",
+      nextBg: "rgba(16, 42, 76, 0.90)", nextText: "#ffe082",
+      prayerBg: "rgba(14, 33, 58, 0.90)", prayerText: "#e3f2fd", accent: "#60a5fa",
+      sunriseBg: "rgba(14, 33, 58, 0.90)", sunriseText: "#ffd54f", jumuahBg: "rgba(14, 33, 58, 0.90)", jumuahText: "#90caf9",
+      uiButtonBg: "rgba(15, 39, 68, 0.92)", uiButtonText: "#90caf9"
+    }
+  },
+  {
+    id: "royal_emerald", name: "أخضر زمردي",
+    colors: {
+      screenBg: "#061e1a", headerBg: "transparent", headerText: "#ffe082", boxBorder: "#26a69a",
+      clockBg: "rgba(10, 46, 40, 0.90)", clockText: "#e6b84c", clockAccent: "#ffe082", dateText: "#b2dfdb",
+      nextBg: "rgba(18, 69, 60, 0.90)", nextText: "#ffe082",
+      prayerBg: "rgba(12, 53, 46, 0.90)", prayerText: "#ffffff", accent: "#e6b84c",
+      sunriseBg: "rgba(12, 53, 46, 0.90)", sunriseText: "#ffd54f", jumuahBg: "rgba(12, 53, 46, 0.90)", jumuahText: "#b2dfdb",
+      uiButtonBg: "rgba(14, 56, 49, 0.92)", uiButtonText: "#ffe082"
+    }
+  },
+  {
+    id: "crimson_mihrab", name: "قرمزي مسجدي",
+    colors: {
+      screenBg: "#42080a", headerBg: "transparent", headerText: "#ffe082", boxBorder: "#d4a037",
+      clockBg: "rgba(96, 14, 16, 0.90)", clockText: "#ffe082", clockAccent: "#ffffff", dateText: "#fff8e1",
+      nextBg: "rgba(56, 6, 8, 0.90)", nextText: "#ffe082",
+      prayerBg: "rgba(77, 10, 12, 0.90)", prayerText: "#fff8e1", accent: "#d4a037",
+      sunriseBg: "rgba(77, 10, 12, 0.90)", sunriseText: "#ffe082", jumuahBg: "rgba(77, 10, 12, 0.90)", jumuahText: "#ffe082",
+      uiButtonBg: "rgba(90, 16, 18, 0.92)", uiButtonText: "#ffe082"
+    }
+  },
+  {
+    id: "silver_platinum", name: "فضي بلاتيني",
+    colors: {
+      screenBg: "#111418", headerBg: "transparent", headerText: "#f3f4f6", boxBorder: "#6b7280",
+      clockBg: "rgba(24, 28, 34, 0.90)", clockText: "#e5e7eb", clockAccent: "#93c5fd", dateText: "#d1d5db",
+      nextBg: "rgba(31, 36, 45, 0.90)", nextText: "#e5e7eb",
+      prayerBg: "rgba(24, 28, 34, 0.90)", prayerText: "#f3f4f6", accent: "#60a5fa",
+      sunriseBg: "rgba(24, 28, 34, 0.90)", sunriseText: "#d1d5db", jumuahBg: "rgba(24, 28, 34, 0.90)", jumuahText: "#d1d5db",
+      uiButtonBg: "rgba(31, 36, 45, 0.92)", uiButtonText: "#e5e7eb"
+    }
+  }
+];
+
+function applyWebTheme(id) {
+  const found = WEB_THEMES.find(t => t.id === id);
+  if (!found) return;
+  appState.settings.colors = structuredClone(found.colors);
+  saveSettings(`✓ تم تطبيق وحفظ سمة: ${found.name}`);
+  renderSettingsTab();
+}
+
+function applyAllFontColor(hexColor) {
+  const c = appState.settings.colors;
+  ["headerText","clockText","clockAccent","dateText","nextText","prayerText","sunriseText","jumuahText","uiButtonText"].forEach(k => {
+    c[k] = hexColor;
+  });
+  saveSettings("✓ تم توحيد لون جميع الخطوط والنصوص");
+  renderSettingsTab();
+}
+
+function applyAllBoxesBgHex(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) || 0;
+  const g = parseInt(hex.slice(3, 5), 16) || 0;
+  const b = parseInt(hex.slice(5, 7), 16) || 0;
+  applyAllBoxesBgColor(`rgba(${r}, ${g}, ${b}, 0.84)`);
+}
+
+function applyAllBoxesBgColor(cssColor) {
+  const c = appState.settings.colors;
+  ["clockBg","nextBg","prayerBg","sunriseBg","jumuahBg"].forEach(k => { c[k] = cssColor; });
+  c.uiButtonBg = cssColor === "transparent" ? "rgba(0, 0, 0, 0.40)" : cssColor;
+  saveSettings("✓ تم توحيد لون خلفيات جميع الصناديق");
+  renderSettingsTab();
+}
+
+function reloadFullAdhkar() {
+  appState.adhkar = structuredClone(DEFAULT_ADHKAR);
+  saveSettings("✓ تم تحميل أذكار ما بعد الصلاة الكاملة (13 ذكراً)").then(renderSettingsTab);
+}
+
+let activeQuickPrayerKey = null;
+function openQuickEdit(prayerKey) {
+  activeQuickPrayerKey = prayerKey;
+  renderQuickEdit();
+  document.getElementById("quickEditModal").classList.add("show");
+}
+function closeQuickEdit() {
+  activeQuickPrayerKey = null;
+  document.getElementById("quickEditModal").classList.remove("show");
+}
+function renderQuickEdit() {
+  if (!activeQuickPrayerKey) return;
+  const s = appState.settings;
+  const city = appState.cities[s.selectedCityId];
+  if (!city) return;
+  const nowP = getCityNowParts(city.tz);
+  const sched = computeScheduleForCity(city, nowP.y, nowP.m, nowP.d);
+  const names = { fajr:"الفجر", sunrise:"الشروق", dhuhr:"الظهر", asr:"العصر", maghrib:"المغرب", isha:"العشاء", jumuah:"صلاة الجمعة" };
+  const off = sched.offs[activeQuickPrayerKey] || 0;
+  const iq = city.iqama?.[activeQuickPrayerKey] ?? 15;
+  const isSunrise = activeQuickPrayerKey === "sunrise";
+
+  document.getElementById("quickEditCard").innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <strong style="color:#dfb743;font-size:19px;">تعديل سريع: ${names[activeQuickPrayerKey] || activeQuickPrayerKey}</strong>
+      <button class="btn-secondary" onclick="closeQuickEdit()">إغلاق</button>
+    </div>
+    <div class="s-row">
+      <span>الموقت المعدّل</span>
+      <strong style="color:#dfb743;font-size:22px;font-variant-numeric:tabular-nums;">${fmtMin(sched.adj[activeQuickPrayerKey], s.is24Hour)}</strong>
+    </div>
+    <div style="font-size:13px;color:#b2dfdb;">التعديل اليدوي: ${off > 0 ? "+"+off : off} دقيقة (الأصلي: ${fmtMin(sched.orig[activeQuickPrayerKey], s.is24Hour)})</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+      <button class="btn-secondary" onclick="adjOffset('${activeQuickPrayerKey}',-5);renderQuickEdit()">-5 د</button>
+      <button class="btn-secondary" onclick="adjOffset('${activeQuickPrayerKey}',-1);renderQuickEdit()">-1 د</button>
+      <button class="btn-secondary" onclick="adjOffset('${activeQuickPrayerKey}',1);renderQuickEdit()">+1 د</button>
+      <button class="btn-secondary" onclick="adjOffset('${activeQuickPrayerKey}',5);renderQuickEdit()">+5 د</button>
+      ${off !== 0 ? `<button class="btn-danger" onclick="resetOneOffset('${activeQuickPrayerKey}');renderQuickEdit()">تصفير</button>` : ""}
+    </div>
+    ${!isSunrise ? `<div class="s-row">
+      <span>مدة الإقامة: <strong>${iq} دقيقة</strong></span>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-secondary" onclick="setIqama('${activeQuickPrayerKey}',${iq-1});renderQuickEdit()">-</button>
+        <button class="btn-secondary" onclick="setIqama('${activeQuickPrayerKey}',${iq+1});renderQuickEdit()">+</button>
+      </div>
+    </div>` : ""}
+    <button class="btn-primary" onclick="closeQuickEdit()">تم</button>
+  `;
+}
+
+async function selectCity(id) {
+  appState.settings.selectedCityId = id;
+  appState.selectedCountry = appState.cities[id]?.cAr || appState.selectedCountry;
+  appState.dismissedKey = null;
+  await saveSettings("✓ تم تغيير المدينة وحفظها");
+  fetchWeatherIfOnline();
+  syncPrayerTimesOnline(false);
+  renderSettingsTab();
+}
+async function addCustomCity() {
+  const cAr = document.getElementById("ncCountry").value.trim();
+  const ar = document.getElementById("ncCity").value.trim();
+  const lat = parseFloat(document.getElementById("ncLat").value);
+  const lon = parseFloat(document.getElementById("ncLon").value);
+  const tz = document.getElementById("ncTz").value.trim() || "UTC";
+  if (!cAr || !ar || isNaN(lat) || isNaN(lon)) return showToast("يرجى إدخال بيانات وإحداثيات صحيحة");
+  const id = "custom_" + Date.now();
+  const cfg = normalizeCityCfg({ id, cAr, cEn: cAr, ar, en: ar, lat, lon, tz, method: "MWL", highLat: "TWILIGHT" });
+  await saveCity(cfg, null);
+  await selectCity(id);
+}
+function updateCityFieldSilent(f, v) {
+  const c = appState.cities[appState.settings.selectedCityId];
+  c[f] = v;
+  appState.cities[c.id] = c;
+  dbPut("cities", c);
+  lsSet("cities", appState.cities);
+  tick();
+}
+async function updateCityAndSync(f, v) {
+  const c = appState.cities[appState.settings.selectedCityId];
+  c[f] = v;
+  await saveCity(c);
+  syncPrayerTimesOnline(false);
+  renderSettingsTab();
+}
+async function updateCityNumAndSync(f, v) {
+  const c = appState.cities[appState.settings.selectedCityId];
+  c[f] = v === "" ? null : Number(v);
+  await saveCity(c);
+  syncPrayerTimesOnline(false);
+  renderSettingsTab();
+}
+function sHijri(d) { appState.settings.hijriOffset = Math.max(-3, Math.min(3, appState.settings.hijriOffset + d)); saveSettings(); renderSettingsTab(); }
+function toggleTempMode() {
+  const c = appState.cities[appState.settings.selectedCityId];
+  c.tempOnly = !c.tempOnly;
+  const p = getCityNowParts(c.tz);
+  c.tempDate = c.tempOnly ? `${p.y}-${String(p.m).padStart(2,"0")}-${String(p.d).padStart(2,"0")}` : null;
+  saveCity(c).then(renderSettingsTab);
+}
+function adjOffset(k, d) {
+  const c = appState.cities[appState.settings.selectedCityId];
+  c.offsets[k] = Math.max(-120, Math.min(120, (c.offsets[k] || 0) + d));
+  const p = getCityNowParts(c.tz);
+  if (c.tempOnly) c.tempDate = `${p.y}-${String(p.m).padStart(2,"0")}-${String(p.d).padStart(2,"0")}`;
+  saveCity(c).then(renderSettingsTab);
+}
+function resetOneOffset(k) { const c = appState.cities[appState.settings.selectedCityId]; c.offsets[k] = 0; saveCity(c).then(renderSettingsTab); }
+function resetAllOffsets() {
+  const c = appState.cities[appState.settings.selectedCityId];
+  Object.keys(c.offsets).forEach(k => c.offsets[k] = 0);
+  c.tempOnly = false; c.tempDate = null;
+  saveCity(c, "✓ تمت إعادة جميع مواقيت المدينة للأصل").then(renderSettingsTab);
+}
+function toggleJumuahFollow() { const c = appState.cities[appState.settings.selectedCityId]; c.jumuahFollowDhuhr = !c.jumuahFollowDhuhr; saveCity(c).then(renderSettingsTab); }
+function setJumuahHM(h, m) {
+  const c = appState.cities[appState.settings.selectedCityId];
+  if (h !== null) c.jumuahHour = Math.max(10, Math.min(15, +h));
+  if (m !== null) c.jumuahMin = Math.max(0, Math.min(59, +m));
+  saveCity(c);
+}
+function setIqama(k, v) { const c = appState.cities[appState.settings.selectedCityId]; c.iqama[k] = Math.max(0, Math.min(90, v)); saveCity(c).then(renderSettingsTab); }
+
+async function uploadMediaFile(slot, file) {
+  if (!file) return;
+  await dbPut("media", { slot, blob: file, name: file.name });
+  if (appState.mediaUrls[slot]) URL.revokeObjectURL(appState.mediaUrls[slot]);
+  appState.mediaUrls[slot] = URL.createObjectURL(file);
+  appState.mediaNames[slot] = file.name;
+  applyVisualSettings();
+  renderSettingsTab();
+  showToast("✓ تم حفظ الصورة نهائياً في المتصفح");
+}
+async function clearMediaFile(slot) {
+  await dbDelete("media", slot);
+  if (appState.mediaUrls[slot]) URL.revokeObjectURL(appState.mediaUrls[slot]);
+  delete appState.mediaUrls[slot];
+  delete appState.mediaNames[slot];
+  applyVisualSettings();
+  renderSettingsTab();
+  showToast("✓ تمت استعادة الافتراضي");
+}
+
+function stageAudioFile(slot, file) {
+  if (!file) return;
+  if (appState.stagedAudio[slot]?.url) URL.revokeObjectURL(appState.stagedAudio[slot].url);
+  appState.stagedAudio[slot] = { file, url: URL.createObjectURL(file), name: file.name };
+  renderSettingsTab();
+}
+function playStagedAudio(slot) {
+  const st = appState.stagedAudio[slot];
+  if (st?.url) playAudioUrl(st.url, null);
+}
+async function commitStagedAudio(slot) {
+  const st = appState.stagedAudio[slot];
+  if (!st) return;
+  stopAdhanAudio();
+  await dbPut("media", { slot, blob: st.file, name: st.name });
+  if (appState.mediaUrls[slot]) URL.revokeObjectURL(appState.mediaUrls[slot]);
+  appState.mediaUrls[slot] = URL.createObjectURL(st.file);
+  appState.mediaNames[slot] = st.name;
+  URL.revokeObjectURL(st.url);
+  delete appState.stagedAudio[slot];
+  renderSettingsTab();
+  showToast("✓ تم اعتماد وحفظ صوت الأذان بنجاح");
+}
+function cancelStagedAudio(slot) {
+  stopAdhanAudio();
+  const st = appState.stagedAudio[slot];
+  if (st?.url) URL.revokeObjectURL(st.url);
+  delete appState.stagedAudio[slot];
+  renderSettingsTab();
+}
+
+function exportBackupJson() {
+  const payload = {
+    version: 3,
+    settings: appState.settings,
+    cities: Object.values(appState.cities),
+    adhkar: appState.adhkar
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "al_moazin_backup.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  showToast("✓ تم تصدير النسخة الاحتياطية JSON");
+}
+
+async function importBackupJson(file) {
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (data.settings) {
+      appState.settings = {
+        ...structuredClone(DEFAULT_SETTINGS),
+        ...data.settings,
+        colors: { ...DEFAULT_COLORS, ...(data.settings.colors || {}) }
+      };
+      await dbPut("settings", appState.settings);
+      lsSet("settings", appState.settings);
+    }
+    if (Array.isArray(data.cities)) {
+      for (const c of data.cities) {
+        if (c && c.id) {
+          appState.cities[c.id] = c;
+          await dbPut("cities", c);
+        }
+      }
+      lsSet("cities", appState.cities);
+    }
+    if (Array.isArray(data.adhkar)) {
+      appState.adhkar = data.adhkar;
+    }
+    applyVisualSettings();
+    renderSettingsTab();
+    tick();
+    showToast("✓ تم استيراد الإعدادات وحفظها بنجاح");
+  } catch (_) {
+    showToast("ملف النسخة الاحتياطية غير صالح");
+  }
+}
+
+function confirmResetDefaults() {
+  if (!window.confirm("هل أنت متأكد من استعادة جميع الألوان والإعدادات العامة للوضع الافتراضي؟")) return;
+  appState.settings = structuredClone(DEFAULT_SETTINGS);
+  appState.settings.v4Migrated = true;
+  saveSettings("✓ تمت استعادة الإعدادات الافتراضية بموافقتك").then(renderSettingsTab);
+}
+
+initApp();
+</script>
+</body>
+</html>
